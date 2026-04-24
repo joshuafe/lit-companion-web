@@ -55,6 +55,22 @@ export default function SettingsPage() {
       )}
 
       <section className="bg-bg-card rounded-2xl p-4">
+        <div className="flex items-center justify-between">
+          <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
+            Preferred journals
+          </div>
+          <Link to="/settings/journals" className="text-accent text-sm font-medium">
+            Customize →
+          </Link>
+        </div>
+        <div className="mt-2 text-caption text-text-secondary">
+          {profile?.suggested_journals?.length
+            ? `${profile.suggested_journals.length} selected`
+            : "Pick a starting set."}
+        </div>
+      </section>
+
+      <section className="bg-bg-card rounded-2xl p-4">
         <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
           About
         </div>
