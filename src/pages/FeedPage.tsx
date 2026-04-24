@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import type { Paper } from "../lib/types";
+
+const LONG_PRESS_MS = 500;
 
 const JUNK_TITLES = new Set([
   "jama", "nature", "science", "lancet", "cell", "nejm", "bmj", "blood", "immunity",
@@ -80,6 +82,48 @@ export default function FeedPage() {
   const [pinnedIDs, setPinnedIDs] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
+  const longPressTimer = useRef<number | null>(null);
+  const longPressed = useRef(false);
+  const navigate = useNavigate();
+
+  async function pinForLater(p: Paper) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { error: err } = await supabase.from("pins").upsert(
+      { user_id: user.id, paper_id: p.id, note: "saved for later (long-press)" },
+      { onConflict: "user_id,paper_id" },
+    );
+    if (err) {
+      setFlash(`Error: ${err.message}`);
+    } else {
+      setPinnedIDs((s) => new Set(s).add(p.id));
+      setFlash(`★ Saved "${p.title.slice(0, 48)}…"`);
+      if (navigator.vibrate) navigator.vibrate(15);
+    }
+    setTimeout(() => setFlash(null), 2000);
+  }
+
+  function startLongPress(p: Paper) {
+    longPressed.current = false;
+    longPressTimer.current = window.setTimeout(() => {
+      longPressed.current = true;
+      pinForLater(p);
+    }, LONG_PRESS_MS);
+  }
+  function cancelLongPress() {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }
+  function handleNav(e: React.MouseEvent, paperId: string) {
+    if (longPressed.current) {
+      e.preventDefault();
+      return;
+    }
+    navigate(`/paper/${paperId}`);
+  }
 
   async function load() {
     setLoading(true);
@@ -140,6 +184,14 @@ export default function FeedPage() {
 
       {error && <div className="text-sm text-red-600 mb-4">{error}</div>}
 
+      {flash && (
+        <div className="fixed bottom-24 inset-x-0 flex justify-center px-4 z-20 pointer-events-none">
+          <div className="bg-text-primary text-bg-primary text-sm px-4 py-2 rounded-full shadow-lg">
+            {flash}
+          </div>
+        </div>
+      )}
+
       {!loading && papers.length === 0 && (
         <div className="text-center py-16">
           <div className="text-4xl mb-3">📂</div>
@@ -156,9 +208,20 @@ export default function FeedPage() {
           const inst = p.last_author_institution || p.first_author_institution;
           return (
             <li key={p.id}>
-              <Link
-                to={`/paper/${p.id}`}
-                className="block bg-bg-card rounded-card overflow-hidden active:opacity-80 transition"
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={(e) => handleNav(e as any, p.id)}
+                onKeyDown={(e) => { if (e.key === "Enter") navigate(`/paper/${p.id}`); }}
+                onTouchStart={() => startLongPress(p)}
+                onTouchEnd={cancelLongPress}
+                onTouchMove={cancelLongPress}
+                onTouchCancel={cancelLongPress}
+                onMouseDown={() => startLongPress(p)}
+                onMouseUp={cancelLongPress}
+                onMouseLeave={cancelLongPress}
+                onContextMenu={(e) => { e.preventDefault(); pinForLater(p); }}
+                className="block bg-bg-card rounded-card overflow-hidden active:opacity-80 transition cursor-pointer select-none"
               >
                 <div className="p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -223,11 +286,11 @@ export default function FeedPage() {
                     {inst && <span className="text-text-secondary/80"> · {inst}</span>}
                   </span>
                   {pinnedIDs.has(p.id) && (
-                    <span className="text-accent font-medium shrink-0">● pinned</span>
+                    <span className="text-accent font-medium shrink-0">● saved</span>
                   )}
                 </div>
                 </div>
-              </Link>
+              </div>
             </li>
           );
         })}
