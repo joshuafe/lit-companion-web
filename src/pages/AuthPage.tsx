@@ -23,6 +23,11 @@ export default function AuthPage() {
   return (
     <div className="app-shell flex flex-col justify-center px-7 py-12 bg-bg-primary">
       <div className="max-w-md mx-auto w-full">
+        <img
+          src="/logo.svg"
+          alt="Literature Companion"
+          className="w-24 h-24 mb-4 rounded-2xl shadow-sm"
+        />
         <div className="text-accent text-eyebrow font-semibold uppercase tracking-wider">
           Literature Companion
         </div>
