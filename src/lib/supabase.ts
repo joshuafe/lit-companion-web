@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 
 // Baked in at build time. Publishable key is safe for client — RLS enforces
 // per-user isolation. To swap projects, edit these two constants.
-const SUPABASE_URL = "https://szwdguzrwkkhcjabkkjw.supabase.co";
+export const SUPABASE_URL = "https://szwdguzrwkkhcjabkkjw.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY =
   "sb_publishable_lGCJ5PE3AZtCKpp4Za2jFg_CT_J3ogM";
 
