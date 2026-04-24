@@ -15,25 +15,45 @@ interface Row {
   avg_relevance: number | null;
   pins: number;
   dismissals: number;
+  briefing_count: number;
   latest_briefing_date: string | null;
   latest_briefing_has_audio: boolean;
   latest_briefing_paper_count: number;
   latest_briefing_transcript: string | null;
+  last_action: string | null;
+  days_since_action: number | null;
+  days_since_signup: number | null;
+  active_days_30d: number;
+  action_rate: number;
+}
+
+interface Summary {
+  total_users: number;
+  active_7d: number;
+  active_30d: number;
+  onboarded: number;
+  total_papers: number;
+  total_pins: number;
+  total_dismissals: number;
+  total_briefings: number;
 }
 
 type SortKey =
   | "email"
-  | "last_sign_in"
+  | "last_action"
+  | "active_days_30d"
   | "paper_count"
   | "pins"
+  | "action_rate"
   | "pending_seeds"
   | "avg_relevance";
 
 export default function AdminPage() {
   const [rows, setRows] = useState<Row[]>([]);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>("last_sign_in");
+  const [sortKey, setSortKey] = useState<SortKey>("last_action");
   const [sortDesc, setSortDesc] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -58,6 +78,7 @@ export default function AdminPage() {
       }
       const data = await res.json();
       setRows(data.rows || []);
+      setSummary(data.summary || null);
     } catch (e: any) {
       setError(e.message);
     }
@@ -86,26 +107,26 @@ export default function AdminPage() {
 
   function toggleSort(k: SortKey) {
     if (k === sortKey) setSortDesc(!sortDesc);
-    else {
-      setSortKey(k);
-      setSortDesc(true);
-    }
+    else { setSortKey(k); setSortDesc(true); }
   }
 
   function fmtDate(s: string | null) {
     if (!s) return "—";
-    return new Date(s).toLocaleDateString("en-US", {
-      month: "short", day: "numeric",
-    });
+    return new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }
-
-  function fmtScore(s: number | null) {
-    if (s == null) return "—";
-    return `${Math.round(s * 100)}`;
+  function fmtScore(s: number | null) { return s == null ? "—" : `${Math.round(s * 100)}`; }
+  function fmtRate(r: number) { return `${Math.round(r * 100)}%`; }
+  function fmtAgo(d: number | null) {
+    if (d == null) return "—";
+    if (d === 0) return "today";
+    if (d === 1) return "1d";
+    if (d < 30) return `${d}d`;
+    if (d < 365) return `${Math.floor(d / 30)}mo`;
+    return `${Math.floor(d / 365)}y`;
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 pt-10 pb-16">
+    <div className="max-w-5xl mx-auto px-4 pt-10 pb-16">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-[28px] font-semibold text-text-primary">Admin</h1>
         <button
@@ -123,19 +144,40 @@ export default function AdminPage() {
         </div>
       )}
 
+      {summary && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+          <Stat label="Users" value={summary.total_users} />
+          <Stat label="Active 7d" value={summary.active_7d} sub={`${summary.active_30d} / 30d`} />
+          <Stat label="Onboarded" value={summary.onboarded} sub={`of ${summary.total_users}`} />
+          <Stat label="Briefings" value={summary.total_briefings} />
+          <Stat label="Papers" value={summary.total_papers} />
+          <Stat label="Pins" value={summary.total_pins} />
+          <Stat label="Dismissals" value={summary.total_dismissals} />
+          <Stat
+            label="Action rate"
+            value={
+              summary.total_papers
+                ? fmtRate((summary.total_pins + summary.total_dismissals) / summary.total_papers)
+                : "—"
+            }
+          />
+        </div>
+      )}
+
       {!loading && !error && rows.length === 0 && (
         <div className="text-caption text-text-secondary">No users yet.</div>
       )}
 
       {rows.length > 0 && (
         <div className="bg-bg-card rounded-2xl overflow-hidden">
-          <div className="grid grid-cols-[1.8fr_0.8fr_0.8fr_0.8fr_0.8fr_0.8fr] gap-2 px-3 py-2 text-[11px] uppercase tracking-wider font-semibold text-text-secondary border-b border-stroke">
-            <button onClick={() => toggleSort("email")} className="text-left">User</button>
-            <button onClick={() => toggleSort("last_sign_in")} className="text-left">Last seen</button>
-            <button onClick={() => toggleSort("paper_count")} className="text-left">Papers</button>
-            <button onClick={() => toggleSort("avg_relevance")} className="text-left">Avg %</button>
-            <button onClick={() => toggleSort("pins")} className="text-left">★ / ✕</button>
-            <button onClick={() => toggleSort("pending_seeds")} className="text-left">Seeds</button>
+          <div className="grid grid-cols-[1.6fr_0.7fr_0.7fr_0.7fr_0.7fr_0.7fr_0.7fr] gap-2 px-3 py-2 text-[11px] uppercase tracking-wider font-semibold text-text-secondary border-b border-stroke">
+            <HeaderBtn label="User" k="email" sortKey={sortKey} desc={sortDesc} onClick={toggleSort} />
+            <HeaderBtn label="Last act." k="last_action" sortKey={sortKey} desc={sortDesc} onClick={toggleSort} />
+            <HeaderBtn label="Active/30" k="active_days_30d" sortKey={sortKey} desc={sortDesc} onClick={toggleSort} />
+            <HeaderBtn label="Papers" k="paper_count" sortKey={sortKey} desc={sortDesc} onClick={toggleSort} />
+            <HeaderBtn label="Avg %" k="avg_relevance" sortKey={sortKey} desc={sortDesc} onClick={toggleSort} />
+            <HeaderBtn label="★/✕ · rate" k="action_rate" sortKey={sortKey} desc={sortDesc} onClick={toggleSort} />
+            <HeaderBtn label="Seeds" k="pending_seeds" sortKey={sortKey} desc={sortDesc} onClick={toggleSort} />
           </div>
 
           <ul className="divide-y divide-stroke">
@@ -145,21 +187,37 @@ export default function AdminPage() {
                 <li key={r.user_id}>
                   <button
                     onClick={() => setExpanded(isOpen ? null : r.user_id)}
-                    className="w-full grid grid-cols-[1.8fr_0.8fr_0.8fr_0.8fr_0.8fr_0.8fr] gap-2 px-3 py-3 items-center text-left active:bg-bg-primary/50"
+                    className="w-full grid grid-cols-[1.6fr_0.7fr_0.7fr_0.7fr_0.7fr_0.7fr_0.7fr] gap-2 px-3 py-3 items-center text-left active:bg-bg-primary/50"
                   >
                     <div className="min-w-0">
                       <div className="text-sm text-text-primary truncate">
                         {r.email || "(no email)"}
                       </div>
                       <div className="text-[11px] text-text-secondary truncate">
-                        {r.user_id.slice(0, 8)}
+                        {r.user_id.slice(0, 8)} · {r.days_since_signup != null ? `${r.days_since_signup}d old` : ""}
                       </div>
                     </div>
-                    <div className="text-sm text-text-primary">{fmtDate(r.last_sign_in)}</div>
+                    <div className="text-sm">
+                      <span className={
+                        r.days_since_action != null && r.days_since_action <= 7
+                          ? "text-relevance-high"
+                          : r.days_since_action != null && r.days_since_action <= 30
+                          ? "text-text-primary"
+                          : "text-text-secondary"
+                      }>
+                        {fmtAgo(r.days_since_action)}
+                      </span>
+                    </div>
+                    <div className="text-sm text-text-primary">
+                      {r.active_days_30d}
+                    </div>
                     <div className="text-sm text-text-primary">{r.paper_count}</div>
                     <div className="text-sm text-text-primary">{fmtScore(r.avg_relevance)}</div>
                     <div className="text-sm text-text-primary">
-                      {r.pins} / {r.dismissals}
+                      {r.pins}/{r.dismissals}
+                      <span className="text-[11px] text-text-secondary ml-1">
+                        {fmtRate(r.action_rate)}
+                      </span>
                     </div>
                     <div className="text-sm text-text-primary">
                       {r.seed_count}
@@ -173,10 +231,8 @@ export default function AdminPage() {
                     <div className="px-4 py-3 bg-bg-primary/50 space-y-2 text-caption">
                       <DetailRow k="Interest" v={r.interest_text || "—"} />
                       <DetailRow k="Preferred journals" v={String(r.journal_count)} />
-                      <DetailRow
-                        k="Calibrated"
-                        v={r.calibrated_at ? fmtDate(r.calibrated_at) : "never"}
-                      />
+                      <DetailRow k="Calibrated" v={r.calibrated_at ? fmtDate(r.calibrated_at) : "never"} />
+                      <DetailRow k="Briefings delivered" v={String(r.briefing_count)} />
                       <DetailRow
                         k="Latest briefing"
                         v={
@@ -186,15 +242,10 @@ export default function AdminPage() {
                         }
                       />
                       {r.latest_briefing_transcript && (
-                        <DetailRow
-                          k="Transcript"
-                          v={r.latest_briefing_transcript + "…"}
-                        />
+                        <DetailRow k="Transcript" v={r.latest_briefing_transcript + "…"} />
                       )}
-                      <DetailRow
-                        k="Signed up"
-                        v={r.created_at ? fmtDate(r.created_at) : "—"}
-                      />
+                      <DetailRow k="Signed up" v={r.created_at ? fmtDate(r.created_at) : "—"} />
+                      <DetailRow k="Last sign-in" v={r.last_sign_in ? fmtDate(r.last_sign_in) : "—"} />
                     </div>
                   )}
                 </li>
@@ -204,6 +255,36 @@ export default function AdminPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function Stat({ label, value, sub }: { label: string; value: number | string; sub?: string }) {
+  return (
+    <div className="bg-bg-card rounded-2xl px-3 py-2.5">
+      <div className="text-[10px] uppercase tracking-wider font-semibold text-text-secondary">
+        {label}
+      </div>
+      <div className="text-xl font-semibold text-text-primary leading-tight">{value}</div>
+      {sub && <div className="text-[11px] text-text-secondary">{sub}</div>}
+    </div>
+  );
+}
+
+function HeaderBtn({
+  label, k, sortKey, desc, onClick,
+}: {
+  label: string;
+  k: SortKey;
+  sortKey: SortKey;
+  desc: boolean;
+  onClick: (k: SortKey) => void;
+}) {
+  const active = k === sortKey;
+  return (
+    <button onClick={() => onClick(k)} className={`text-left ${active ? "text-accent" : ""}`}>
+      {label}
+      {active ? (desc ? " ↓" : " ↑") : ""}
+    </button>
   );
 }
 
