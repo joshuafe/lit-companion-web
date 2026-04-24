@@ -10,6 +10,7 @@ import SettingsPage from "./pages/SettingsPage";
 import SeedsPage from "./pages/SeedsPage";
 import JournalsPage from "./pages/JournalsPage";
 import AdminPage from "./pages/AdminPage";
+import AdminUserDetailPage from "./pages/AdminUserDetailPage";
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -47,6 +48,7 @@ export default function App() {
           <Route path="/settings/seeds" element={<SeedsPage />} />
           <Route path="/settings/journals" element={<JournalsPage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/admin/:userId" element={<AdminUserDetailPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

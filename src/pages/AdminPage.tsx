@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase, SUPABASE_URL } from "../lib/supabase";
 
 interface Row {
@@ -246,6 +247,14 @@ export default function AdminPage() {
                       )}
                       <DetailRow k="Signed up" v={r.created_at ? fmtDate(r.created_at) : "—"} />
                       <DetailRow k="Last sign-in" v={r.last_sign_in ? fmtDate(r.last_sign_in) : "—"} />
+                      <div className="pt-1">
+                        <Link
+                          to={`/admin/${r.user_id}`}
+                          className="text-accent font-medium"
+                        >
+                          Open detail →
+                        </Link>
+                      </div>
                     </div>
                   )}
                 </li>
