@@ -12,16 +12,29 @@ export default function FeedPage() {
   async function load() {
     setLoading(true);
     setError(null);
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
     const [{ data: rows, error: err1 }, { data: pins }] = await Promise.all([
       supabase
         .from("papers")
         .select()
+        .or(`published_at.gte.${ninetyDaysAgo},published_at.is.null`)
         .order("relevance_score", { ascending: false })
-        .limit(30),
+        .limit(60),
       supabase.from("pins").select("paper_id"),
     ]);
     if (err1) setError(err1.message);
-    setPapers(((rows as Paper[]) || []).filter((p) => p.title));
+    const freshCutoff = Date.now() - 2 * 24 * 60 * 60 * 1000;
+    const ranked = ((rows as Paper[]) || [])
+      .filter((p) => p.title)
+      .sort((a, b) => {
+        const aFresh = a.published_at && Date.parse(a.published_at) >= freshCutoff ? 1 : 0;
+        const bFresh = b.published_at && Date.parse(b.published_at) >= freshCutoff ? 1 : 0;
+        if (aFresh !== bFresh) return bFresh - aFresh;
+        return (b.relevance_score ?? 0) - (a.relevance_score ?? 0);
+      });
+    setPapers(ranked);
     setPinnedIDs(new Set((pins || []).map((p: any) => p.paper_id)));
     setLoading(false);
   }
