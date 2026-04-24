@@ -7,6 +7,7 @@ import FeedPage from "./pages/FeedPage";
 import PaperDetailPage from "./pages/PaperDetailPage";
 import BriefingPage from "./pages/BriefingPage";
 import SettingsPage from "./pages/SettingsPage";
+import SeedsPage from "./pages/SeedsPage";
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/paper/:id" element={<PaperDetailPage />} />
           <Route path="/briefing" element={<BriefingPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/seeds" element={<SeedsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import type { Profile } from "../lib/types";
 
@@ -39,8 +40,13 @@ export default function SettingsPage() {
 
       {profile && (
         <section className="bg-bg-card rounded-2xl p-4">
-          <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
-            Interests
+          <div className="flex items-center justify-between">
+            <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
+              Interests
+            </div>
+            <Link to="/settings/seeds" className="text-accent text-sm font-medium">
+              Manage seeds →
+            </Link>
           </div>
           <div className="mt-2 text-caption text-text-secondary">
             {profile.interest_text || "No seeds yet."}
