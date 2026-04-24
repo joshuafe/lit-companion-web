@@ -54,8 +54,18 @@ function featureChips(p: Paper): { label: string; tone: "warm" | "cool" | "accen
   if (title.includes("randomized") || title.includes("randomised")) {
     chips.push({ label: "RCT", tone: "accent" });
   }
-  if (title.startsWith("review") || title.includes(" review ") ||
-      title.includes("systematic review") || title.includes("meta-analysis")) {
+  if (
+    title.startsWith("review") || title.includes(" review ") ||
+    title.includes("systematic review") || title.includes("meta-analysis") ||
+    title.startsWith("hallmarks of") || title.includes("perspective") ||
+    title.startsWith("snapshot") || title.includes("opinion:") ||
+    /\b(the|a)\s+(road ahead|way forward|state of)\b/.test(title) ||
+    p.journal?.toLowerCase().includes("nat rev") ||
+    p.journal?.toLowerCase().includes("reviews") ||
+    p.journal?.toLowerCase().includes("trends in") ||
+    p.journal?.toLowerCase().includes("current opinion") ||
+    p.journal?.toLowerCase().includes("annual review")
+  ) {
     chips.push({ label: "review", tone: "cool" });
   }
   if (p.published_at) {
@@ -150,20 +160,6 @@ export default function FeedPage() {
                 to={`/paper/${p.id}`}
                 className="block bg-bg-card rounded-card overflow-hidden active:opacity-80 transition"
               >
-                {p.hero_image_url && (
-                  <div className="w-full aspect-[16/7] overflow-hidden bg-bg-primary">
-                    <img
-                      src={p.hero_image_url}
-                      alt=""
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).parentElement?.remove();
-                      }}
-                    />
-                  </div>
-                )}
                 <div className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <span className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider line-clamp-1">
@@ -181,8 +177,23 @@ export default function FeedPage() {
                   {stripHtml(p.title)}
                 </h2>
 
+                {p.hero_image_url && (
+                  <div className="mt-3 -mx-4 aspect-[16/7] overflow-hidden bg-bg-primary">
+                    <img
+                      src={p.hero_image_url}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).parentElement?.remove();
+                      }}
+                    />
+                  </div>
+                )}
+
                 {p.summary?.tldr && (
-                  <p className="mt-2 text-caption text-text-primary line-clamp-3">
+                  <p className="mt-3 text-caption text-text-primary line-clamp-3">
                     {stripHtml(p.summary.tldr)}
                   </p>
                 )}
