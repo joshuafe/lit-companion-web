@@ -39,6 +39,7 @@ export interface Paper {
   relevance_score: number | null;
   first_author_institution: string | null;
   last_author_institution: string | null;
+  hero_image_url: string | null;
 }
 
 export interface Briefing {

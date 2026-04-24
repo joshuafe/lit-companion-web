@@ -148,8 +148,23 @@ export default function FeedPage() {
             <li key={p.id}>
               <Link
                 to={`/paper/${p.id}`}
-                className="block bg-bg-card rounded-card p-4 active:opacity-80 transition"
+                className="block bg-bg-card rounded-card overflow-hidden active:opacity-80 transition"
               >
+                {p.hero_image_url && (
+                  <div className="w-full aspect-[16/7] overflow-hidden bg-bg-primary">
+                    <img
+                      src={p.hero_image_url}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).parentElement?.remove();
+                      }}
+                    />
+                  </div>
+                )}
+                <div className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <span className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider line-clamp-1">
                     {p.journal || "Unknown journal"}
@@ -199,6 +214,7 @@ export default function FeedPage() {
                   {pinnedIDs.has(p.id) && (
                     <span className="text-accent font-medium shrink-0">● pinned</span>
                   )}
+                </div>
                 </div>
               </Link>
             </li>
