@@ -45,6 +45,15 @@ export default function AuthPage() {
     else setSent(true);
   }
 
+  async function signInAnonymously() {
+    setError(null);
+    setLoading(true);
+    const { error } = await supabase.auth.signInAnonymously();
+    setLoading(false);
+    if (error) setError(error.message);
+    // On success, App.tsx's onAuthStateChange swaps in the Feed automatically.
+  }
+
   async function signInWithGoogle() {
     setError(null);
     if (!email || !code) {
@@ -151,6 +160,16 @@ export default function AuthPage() {
                 <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A8.99 8.99 0 0 0 9 0 8.99 8.99 0 0 0 .96 4.96l2.99 2.34C4.66 5.17 6.65 3.58 9 3.58z"/>
               </svg>
               Continue with Google
+            </button>
+
+            <button
+              type="button"
+              onClick={signInAnonymously}
+              disabled={loading}
+              className="mt-3 w-full text-text-secondary text-xs underline underline-offset-2 disabled:opacity-50"
+              title="Spin up a disposable test account — useful for trying the app as a different user"
+            >
+              Continue as guest (test)
             </button>
           </>
         )}
