@@ -273,14 +273,14 @@ export default function FeedPage() {
         <div className="flex items-center gap-2 mb-1">
           {streakDays && streakDays > 1 && (
             <span
-              className="inline-flex items-center gap-1 bg-accent/10 text-accent text-[11px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider"
+              className="inline-flex items-center gap-1 bg-jewel-emerald/12 text-jewel-emerald text-[11px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider"
               title={`${streakDays} consecutive days reading`}
             >
               🔥 {streakDays}-day streak
             </span>
           )}
           {newSinceLast > 0 && (
-            <span className="inline-flex items-center bg-accent text-white text-[11px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider">
+            <span className="inline-flex items-center bg-jewel-sapphire text-white text-[11px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
               +{newSinceLast} new
             </span>
           )}
@@ -405,8 +405,10 @@ export default function FeedPage() {
                   </span>
                   {pinnedIDs.has(p.id) && (
                     <span
-                      className={`text-accent font-medium shrink-0 transition-transform ${
-                        burstPaperId === p.id ? "animate-pin-burst" : ""
+                      className={`font-medium shrink-0 transition-all inline-block ${
+                        burstPaperId === p.id
+                          ? "animate-pin-burst text-jewel-topaz drop-shadow-[0_0_4px_rgba(168,133,58,0.55)]"
+                          : "text-accent"
                       }`}
                     >
                       ★ saved

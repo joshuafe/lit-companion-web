@@ -15,6 +15,16 @@ export default {
           secondary: "#7D7266",
         },
         accent: "#B86E4C",      // muted terracotta
+        // Jewel-tone accents — used very sparingly: streak chip (emerald),
+        // 'new since' badge (sapphire), pin-burst glint (topaz). Each is
+        // desaturated to fit the warm-cream base.
+        jewel: {
+          emerald: "#3F6E55",
+          sapphire: "#3B557F",
+          amethyst: "#6B4D78",
+          topaz: "#A8853A",
+          ruby: "#8C3F4C",
+        },
         relevance: {
           high: "#5C7A55",
           mid: "#998F7F",
