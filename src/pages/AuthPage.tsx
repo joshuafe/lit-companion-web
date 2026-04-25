@@ -1,9 +1,13 @@
 import { useState } from "react";
 import { supabase, SUPABASE_URL } from "../lib/supabase";
 
+type Mode = "magic" | "password";
+
 export default function AuthPage() {
+  const [mode, setMode] = useState<Mode>("magic");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,13 +49,30 @@ export default function AuthPage() {
     else setSent(true);
   }
 
-  async function signInAnonymously() {
-    setError(null);
+  async function passwordSubmit(e: React.FormEvent) {
+    e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInAnonymously();
+    setError(null);
+    // Try sign-in first. If the user doesn't exist, fall through to sign-up
+    // (which requires the invite code). This makes the same form work for
+    // both new and returning users.
+    const signIn = await supabase.auth.signInWithPassword({ email, password });
+    if (!signIn.error) {
+      setLoading(false);
+      return;
+    }
+    // Sign-up path — invite code required.
+    const inviteErr = await redeemInvite(email, code);
+    if (inviteErr) {
+      setError(inviteErr);
+      setLoading(false);
+      return;
+    }
+    const signUp = await supabase.auth.signUp({ email, password });
     setLoading(false);
-    if (error) setError(error.message);
-    // On success, App.tsx's onAuthStateChange swaps in the Feed automatically.
+    if (signUp.error) {
+      setError(signUp.error.message);
+    }
   }
 
   async function signInWithGoogle() {
@@ -110,17 +131,38 @@ export default function AuthPage() {
         ) : (
           <>
             <p className="mt-4 text-base text-text-secondary">
-              Alpha access is invite-only. Enter your code, then your email.
+              Alpha access is invite-only. Sign-up needs a code; sign-in
+              with an existing account just needs your password.
             </p>
 
-            <form onSubmit={sendLink} className="mt-6 space-y-3">
+            {/* Mode toggle */}
+            <div className="mt-5 inline-flex bg-bg-card rounded-full p-0.5 text-[12px] font-semibold">
+              <button
+                type="button"
+                onClick={() => setMode("magic")}
+                className={`px-3 py-1.5 rounded-full ${mode === "magic" ? "bg-accent text-white" : "text-text-secondary"}`}
+              >
+                Magic link
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("password")}
+                className={`px-3 py-1.5 rounded-full ${mode === "password" ? "bg-accent text-white" : "text-text-secondary"}`}
+              >
+                Password
+              </button>
+            </div>
+
+            <form
+              onSubmit={mode === "magic" ? sendLink : passwordSubmit}
+              className="mt-4 space-y-3"
+            >
               <input
                 type="text"
                 autoCapitalize="characters"
-                placeholder="Invite code"
+                placeholder="Invite code (sign-up only)"
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
-                required
                 className="w-full rounded-xl bg-bg-card px-4 py-3 text-base text-text-primary placeholder:text-text-secondary/60 border border-transparent focus:border-accent focus:outline-none tracking-wider font-mono"
               />
               <input
@@ -133,12 +175,31 @@ export default function AuthPage() {
                 required
                 className="w-full rounded-xl bg-bg-card px-4 py-3 text-base text-text-primary placeholder:text-text-secondary/60 border border-transparent focus:border-accent focus:outline-none"
               />
+              {mode === "password" && (
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="w-full rounded-xl bg-bg-card px-4 py-3 text-base text-text-primary placeholder:text-text-secondary/60 border border-transparent focus:border-accent focus:outline-none"
+                />
+              )}
               <button
                 type="submit"
-                disabled={loading || !email || !code}
+                disabled={
+                  loading ||
+                  !email ||
+                  (mode === "password" && password.length < 6) ||
+                  (mode === "magic" && !code)
+                }
                 className="w-full rounded-xl bg-accent text-white font-semibold py-3 disabled:opacity-50 active:opacity-80"
               >
-                {loading ? "Sending…" : "Send magic link"}
+                {loading
+                  ? mode === "magic" ? "Sending…" : "Signing in…"
+                  : mode === "magic" ? "Send magic link" : "Sign in / sign up"}
               </button>
             </form>
 
@@ -162,15 +223,6 @@ export default function AuthPage() {
               Continue with Google
             </button>
 
-            <button
-              type="button"
-              onClick={signInAnonymously}
-              disabled={loading}
-              className="mt-3 w-full text-text-secondary text-xs underline underline-offset-2 disabled:opacity-50"
-              title="Spin up a disposable test account — useful for trying the app as a different user"
-            >
-              Continue as guest (test)
-            </button>
           </>
         )}
 
