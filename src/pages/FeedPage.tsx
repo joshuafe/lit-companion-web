@@ -158,6 +158,8 @@ export default function FeedPage() {
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [burstPaperId, setBurstPaperId] = useState<string | null>(null);
+  const [streakDays, setStreakDays] = useState<number | null>(null);
+  const [newSinceLast, setNewSinceLast] = useState<number>(0);
   const longPressTimer = useRef<number | null>(null);
   const longPressed = useRef(false);
   const navigate = useNavigate();
@@ -208,16 +210,32 @@ export default function FeedPage() {
     setError(null);
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
       .toISOString().slice(0, 10);
-    const [{ data: rows, error: err1 }, { data: pins }] = await Promise.all([
+    // Ping the visit RPC alongside the data fetch so streak + new-since
+    // counts are always fresh on Feed open.
+    const [{ data: rows, error: err1 }, { data: pins }, visit] = await Promise.all([
       supabase
         .from("papers")
-        .select()
+        .select("*", { count: "exact" })
         .or(`published_at.gte.${ninetyDaysAgo},published_at.is.null`)
         .order("relevance_score", { ascending: false })
         .limit(60),
       supabase.from("pins").select("paper_id"),
+      supabase.rpc("ping_visit"),
     ]);
     if (err1) setError(err1.message);
+    if (visit?.data && Array.isArray(visit.data) && visit.data.length > 0) {
+      const v = visit.data[0] as { prev_last_seen: string | null; streak_days: number };
+      setStreakDays(v.streak_days);
+      if (v.prev_last_seen) {
+        const cutoff = Date.parse(v.prev_last_seen);
+        const newCount = ((rows as Paper[]) || []).filter(
+          (p) => p.created_at && Date.parse(p.created_at) > cutoff,
+        ).length;
+        setNewSinceLast(newCount);
+      } else {
+        setNewSinceLast(0);
+      }
+    }
 
     const freshCutoff = Date.now() - 2 * 24 * 60 * 60 * 1000;
     const ranked = ((rows as Paper[]) || [])
@@ -252,6 +270,21 @@ export default function FeedPage() {
   return (
     <div className="max-w-lg mx-auto px-5 pt-10">
       <header className="mb-6">
+        <div className="flex items-center gap-2 mb-1">
+          {streakDays && streakDays > 1 && (
+            <span
+              className="inline-flex items-center gap-1 bg-accent/10 text-accent text-[11px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider"
+              title={`${streakDays} consecutive days reading`}
+            >
+              🔥 {streakDays}-day streak
+            </span>
+          )}
+          {newSinceLast > 0 && (
+            <span className="inline-flex items-center bg-accent text-white text-[11px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider">
+              +{newSinceLast} new
+            </span>
+          )}
+        </div>
         <h1 className="text-[34px] font-semibold text-text-primary leading-tight">
           {loading ? "Today" : morningGreeting(papers)}
         </h1>

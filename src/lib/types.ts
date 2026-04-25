@@ -40,6 +40,7 @@ export interface Paper {
   first_author_institution: string | null;
   last_author_institution: string | null;
   hero_image_url: string | null;
+  created_at: string | null;
 }
 
 export interface Briefing {
