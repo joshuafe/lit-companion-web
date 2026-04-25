@@ -16,6 +16,42 @@ const NON_RESEARCH_PREFIXES = [
   "publisher correction:",
 ];
 
+// Mirror of ranking/journals.py TIER_1. Keep these in sync.
+const TIER_1_NORM = new Set<string>([
+  "nature", "cell", "science", "n engl j med", "new england journal of medicine",
+  "blood", "blood adv", "blood advances", "blood neoplasia",
+  "j clin oncol", "journal of clinical oncology",
+  "bone marrow transplant", "bone marrow transplantation",
+  "transplant cell ther", "transplantation and cellular therapy",
+  "leukemia", "exp hematol", "experimental hematology",
+  "immunity", "j exp med", "journal of experimental medicine",
+  "nat immunol", "nature immunology",
+  "nat rev immunol", "nature reviews immunology",
+  "nat med", "nature medicine",
+  "j clin invest", "journal of clinical investigation",
+  "jci insight",
+]);
+function isTier1(journal: string | null | undefined): boolean {
+  if (!journal) return false;
+  const n = journal.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  if (TIER_1_NORM.has(n)) return true;
+  // Multi-token prefix-window match for ISO abbreviations like "Blood Adv" → "Blood advances".
+  const tokens = n.split(" ");
+  for (const pat of TIER_1_NORM) {
+    const pTokens = pat.split(" ");
+    if (pTokens.length < 2 || pTokens.length > tokens.length) continue;
+    outer: for (let start = 0; start <= tokens.length - pTokens.length; start++) {
+      for (let i = 0; i < pTokens.length; i++) {
+        const t = tokens[start + i];
+        const p = pTokens[i];
+        if (t !== p && !(p.length >= 3 && t.startsWith(p))) continue outer;
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
 function isJunk(title: string | null | undefined): boolean {
   if (!title) return true;
   const t = title.trim().toLowerCase();
@@ -226,6 +262,11 @@ export default function FeedPage() {
                 <div className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <span className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider line-clamp-1">
+                    {isTier1(p.journal) ? (
+                      <span className="text-accent mr-1" title="Top-tier journal">★</span>
+                    ) : (
+                      <span className="text-text-secondary/40 mr-1" title="Discovery — exceptional relevance or familiar author">·</span>
+                    )}
                     {p.journal || "Unknown journal"}
                     {p.published_at && (
                       <span className="ml-2 normal-case tracking-normal text-text-secondary/70">
