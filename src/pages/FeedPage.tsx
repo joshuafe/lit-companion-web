@@ -62,6 +62,7 @@ const TIER_1_NORM = new Set<string>([
   "bone marrow transplant", "bone marrow transplantation",
   "transplant cell ther", "transplantation and cellular therapy",
   "leukemia", "exp hematol", "experimental hematology",
+  "am j hematol", "american journal of hematology",
   "immunity", "j exp med", "journal of experimental medicine",
   "nat immunol", "nature immunology",
   "nat rev immunol", "nature reviews immunology",
@@ -342,7 +343,7 @@ export default function FeedPage() {
                     </span>
                   )}
                 </span>
-                <RelevancePill rank={rankByIndex[0]} total={papers.length} />
+                {/* Hero deliberately omits the rank pill — its size says "headline". */}
               </div>
               <h2 className="text-[22px] font-semibold leading-snug text-text-primary line-clamp-3">
                 {stripHtml(p.title)}
