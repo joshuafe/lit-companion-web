@@ -1,16 +1,41 @@
 import { useState } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase, SUPABASE_URL } from "../lib/supabase";
 
 export default function AuthPage() {
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Atomically validates the invite code for this email. On success the
+   * email is added to invite_redemptions; the auth.users INSERT trigger
+   * will then admit any sign-up from this address (magic link OR Google).
+   * Idempotent — a second redeem with the same email returns the original
+   * code, so existing/grandfathered users still pass.
+   */
+  async function redeemInvite(email: string, code: string): Promise<string | null> {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/redeem-invite`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return body.error || `invite check failed (${res.status})`;
+    return null;
+  }
 
   async function sendLink(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    const inviteErr = await redeemInvite(email, code);
+    if (inviteErr) {
+      setError(inviteErr);
+      setLoading(false);
+      return;
+    }
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: window.location.origin },
@@ -22,6 +47,15 @@ export default function AuthPage() {
 
   async function signInWithGoogle() {
     setError(null);
+    if (!email || !code) {
+      setError("Enter email + invite code first — Google sign-in still needs them.");
+      return;
+    }
+    const inviteErr = await redeemInvite(email, code);
+    if (inviteErr) {
+      setError(inviteErr);
+      return;
+    }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: window.location.origin },
@@ -58,6 +92,7 @@ export default function AuthPage() {
               onClick={() => {
                 setSent(false);
                 setEmail("");
+                setCode("");
               }}
             >
               Send another link
@@ -66,10 +101,19 @@ export default function AuthPage() {
         ) : (
           <>
             <p className="mt-4 text-base text-text-secondary">
-              Enter your email. We'll send a one-time link to sign you in.
+              Alpha access is invite-only. Enter your code, then your email.
             </p>
 
             <form onSubmit={sendLink} className="mt-6 space-y-3">
+              <input
+                type="text"
+                autoCapitalize="characters"
+                placeholder="Invite code"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                required
+                className="w-full rounded-xl bg-bg-card px-4 py-3 text-base text-text-primary placeholder:text-text-secondary/60 border border-transparent focus:border-accent focus:outline-none tracking-wider font-mono"
+              />
               <input
                 type="email"
                 autoComplete="email"
@@ -82,7 +126,7 @@ export default function AuthPage() {
               />
               <button
                 type="submit"
-                disabled={loading || !email}
+                disabled={loading || !email || !code}
                 className="w-full rounded-xl bg-accent text-white font-semibold py-3 disabled:opacity-50 active:opacity-80"
               >
                 {loading ? "Sending…" : "Send magic link"}
