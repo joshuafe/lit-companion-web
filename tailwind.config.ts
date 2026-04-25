@@ -39,6 +39,17 @@ export default {
       borderRadius: {
         card: "14px",
       },
+      keyframes: {
+        "pin-burst": {
+          "0%":   { transform: "scale(1)" },
+          "30%":  { transform: "scale(1.45) rotate(-8deg)" },
+          "60%":  { transform: "scale(0.9) rotate(4deg)" },
+          "100%": { transform: "scale(1) rotate(0)" },
+        },
+      },
+      animation: {
+        "pin-burst": "pin-burst 0.65s ease-out",
+      },
     },
   },
   plugins: [],

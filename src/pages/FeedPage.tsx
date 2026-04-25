@@ -5,6 +5,44 @@ import type { Paper } from "../lib/types";
 
 const LONG_PRESS_MS = 500;
 
+// Soft "saved-it" chime — short FM blip via Web Audio API. No asset to ship.
+function playPinChime() {
+  try {
+    const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const now = ctx.currentTime;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(880, now);
+    o.frequency.exponentialRampToValueAtTime(1320, now + 0.18);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.18, now + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.30);
+    o.connect(g).connect(ctx.destination);
+    o.start(now);
+    o.stop(now + 0.32);
+  } catch {
+    /* ignore — no AudioContext, muted device, etc. */
+  }
+}
+
+function morningGreeting(papers: Paper[]): string {
+  const hour = new Date().getHours();
+  const greet =
+    hour < 5  ? "Burning the midnight oil." :
+    hour < 12 ? "Good morning." :
+    hour < 17 ? "Good afternoon." :
+    hour < 22 ? "Good evening." :
+    "Up late.";
+  const t1 = papers.filter((p) => isTier1(p.journal)).length;
+  if (papers.length === 0) return greet;
+  if (t1 === 0) return `${greet} A few discovery picks today.`;
+  if (t1 === papers.length) return `${greet} ${t1} from your top journals.`;
+  return `${greet} ${t1} from your top journals, plus ${papers.length - t1} discovery.`;
+}
+
 const JUNK_TITLES = new Set([
   "jama", "nature", "science", "lancet", "cell", "nejm", "bmj", "blood", "immunity",
 ]);
@@ -119,6 +157,7 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const [burstPaperId, setBurstPaperId] = useState<string | null>(null);
   const longPressTimer = useRef<number | null>(null);
   const longPressed = useRef(false);
   const navigate = useNavigate();
@@ -134,8 +173,11 @@ export default function FeedPage() {
       setFlash(`Error: ${err.message}`);
     } else {
       setPinnedIDs((s) => new Set(s).add(p.id));
+      setBurstPaperId(p.id);
+      setTimeout(() => setBurstPaperId(null), 700);
       setFlash(`★ Saved "${p.title.slice(0, 48)}…"`);
-      if (navigator.vibrate) navigator.vibrate(15);
+      if (navigator.vibrate) navigator.vibrate([18, 30, 12]);
+      playPinChime();
     }
     setTimeout(() => setFlash(null), 2000);
   }
@@ -210,7 +252,9 @@ export default function FeedPage() {
   return (
     <div className="max-w-lg mx-auto px-5 pt-10">
       <header className="mb-6">
-        <h1 className="text-[34px] font-semibold text-text-primary">Today</h1>
+        <h1 className="text-[34px] font-semibold text-text-primary leading-tight">
+          {loading ? "Today" : morningGreeting(papers)}
+        </h1>
         <p className="text-caption text-text-secondary mt-1">
           {loading
             ? "Loading your feed…"
@@ -327,7 +371,13 @@ export default function FeedPage() {
                     {inst && <span className="text-text-secondary/80"> · {inst}</span>}
                   </span>
                   {pinnedIDs.has(p.id) && (
-                    <span className="text-accent font-medium shrink-0">● saved</span>
+                    <span
+                      className={`text-accent font-medium shrink-0 transition-transform ${
+                        burstPaperId === p.id ? "animate-pin-burst" : ""
+                      }`}
+                    >
+                      ★ saved
+                    </span>
                   )}
                 </div>
                 </div>
