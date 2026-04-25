@@ -305,8 +305,95 @@ export default function FeedPage() {
         </div>
       )}
 
+      {/* HERO — paper #1 gets the magazine treatment */}
+      {papers.length > 0 && (() => {
+        const p = papers[0];
+        const chips = featureChips(p);
+        const inst = p.last_author_institution || p.first_author_institution;
+        return (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={(e) => handleNav(e as any, p.id)}
+            onKeyDown={(e) => { if (e.key === "Enter") navigate(`/paper/${p.id}`); }}
+            onTouchStart={() => startLongPress(p)}
+            onTouchEnd={cancelLongPress}
+            onTouchMove={cancelLongPress}
+            onTouchCancel={cancelLongPress}
+            onMouseDown={() => startLongPress(p)}
+            onMouseUp={cancelLongPress}
+            onMouseLeave={cancelLongPress}
+            onContextMenu={(e) => { e.preventDefault(); pinForLater(p); }}
+            className="block bg-bg-card rounded-card overflow-hidden mb-3 active:opacity-80 transition cursor-pointer select-none shadow-sm"
+          >
+            <HeroIllustration paper={p} />
+            <div className="p-5">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <span className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider line-clamp-1">
+                  {isTier1(p.journal) ? (
+                    <span className="text-accent mr-1">★</span>
+                  ) : (
+                    <span className="text-text-secondary/40 mr-1">·</span>
+                  )}
+                  {p.journal || "Unknown journal"}
+                  {p.published_at && (
+                    <span className="ml-2 normal-case tracking-normal text-text-secondary/70">
+                      · {fmtDate(p.published_at)}
+                    </span>
+                  )}
+                </span>
+                <RelevancePill rank={rankByIndex[0]} total={papers.length} />
+              </div>
+              <h2 className="text-[22px] font-semibold leading-snug text-text-primary line-clamp-3">
+                {stripHtml(p.title)}
+              </h2>
+              {p.summary?.tldr && (
+                <p className="mt-2.5 text-[15px] leading-relaxed text-text-primary line-clamp-4">
+                  {stripHtml(p.summary.tldr)}
+                </p>
+              )}
+              {chips.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {chips.map((c) => (
+                    <span
+                      key={c.label}
+                      className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                        c.tone === "warm" ? "bg-accent/15 text-accent"
+                          : c.tone === "accent" ? "bg-accent text-white"
+                          : "bg-bg-primary text-text-secondary"
+                      }`}
+                    >
+                      {c.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="mt-3 flex items-center justify-between text-caption text-text-secondary gap-2">
+                <span className="truncate">
+                  {p.authors?.[p.authors.length - 1] ?? p.authors?.[0] ?? ""}
+                  {inst && <span className="text-text-secondary/80"> · {inst}</span>}
+                </span>
+                {pinnedIDs.has(p.id) && (
+                  <span
+                    className={`font-medium shrink-0 inline-block ${
+                      burstPaperId === p.id
+                        ? "animate-pin-burst text-jewel-topaz drop-shadow-[0_0_4px_rgba(168,133,58,0.55)]"
+                        : "text-accent"
+                    }`}
+                  >
+                    ★ saved
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       <ul className="space-y-3">
-        {papers.map((p, i) => {
+        {papers.slice(1).map((paperRaw, sliceIdx) => {
+          const i = sliceIdx + 1;
+          const p = paperRaw;
           const chips = featureChips(p);
           const inst = p.last_author_institution || p.first_author_institution;
           return (
@@ -411,6 +498,108 @@ export default function FeedPage() {
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+// Hero banner illustration. Uses the publisher's hero image when present;
+// otherwise generates a deterministic warm-cream geometric illustration
+// keyed on the paper title so the same paper always looks the same.
+function HeroIllustration({ paper }: { paper: Paper }) {
+  if (paper.hero_image_url) {
+    return (
+      <div className="w-full aspect-[16/8] overflow-hidden bg-bg-primary relative">
+        <img
+          src={paper.hero_image_url}
+          alt=""
+          className="w-full h-full object-cover"
+          loading="eager"
+          referrerPolicy="no-referrer"
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = "none";
+          }}
+        />
+        {/* Subtle bottom fade so card text reads cleanly below */}
+        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-bg-card to-transparent pointer-events-none" />
+      </div>
+    );
+  }
+  // Fallback: hand-drawn paper-stack illustration with deterministic colors.
+  // Hashes the title so the same paper consistently picks the same palette.
+  const seed = (paper.title || paper.id || "x")
+    .split("")
+    .reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 0);
+  const palettes = [
+    { bg: "#F4EDDD", a: "#B86E4C", b: "#3F6E55", c: "#A8853A" }, // terracotta + emerald + topaz
+    { bg: "#F4EDDD", a: "#3B557F", b: "#B86E4C", c: "#6B4D78" }, // sapphire + terracotta + amethyst
+    { bg: "#F4EDDD", a: "#8C3F4C", b: "#A8853A", c: "#3F6E55" }, // ruby + topaz + emerald
+    { bg: "#F4EDDD", a: "#3F6E55", b: "#3B557F", c: "#A8853A" }, // emerald + sapphire + topaz
+  ];
+  const pal = palettes[seed % palettes.length];
+  const tilt1 = -7 + ((seed >> 3) % 6);
+  const tilt2 = 4 + ((seed >> 7) % 6);
+  return (
+    <div
+      className="w-full aspect-[16/8] overflow-hidden relative"
+      style={{ background: pal.bg }}
+    >
+      <svg
+        viewBox="0 0 320 160"
+        className="w-full h-full"
+        preserveAspectRatio="xMidYMid slice"
+      >
+        {/* faint paper grid in background */}
+        <defs>
+          <pattern id={`grid-${seed}`} width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#2E2A24" strokeWidth="0.4" opacity="0.06" />
+          </pattern>
+        </defs>
+        <rect width="320" height="160" fill={`url(#grid-${seed})`} />
+        {/* coffee-ring stain */}
+        <g opacity="0.22">
+          <circle cx={50 + (seed % 30)} cy="120" r="22" fill="none" stroke={pal.a} strokeWidth="3" />
+          <circle cx={50 + (seed % 30)} cy="120" r="22" fill="none" stroke="#2E2A24" strokeWidth="0.8" opacity="0.4" />
+        </g>
+        {/* back paper */}
+        <g transform={`translate(80 18) rotate(${tilt1})`}>
+          <rect width="140" height="120" rx="6" fill="#FDFAF1" stroke="#2E2A24" strokeWidth="1.4" opacity="0.9" />
+          <rect x="14" y="14" width="80" height="6" rx="1.5" fill={pal.a} opacity="0.6" />
+          <rect x="14" y="28" width="110" height="3" rx="1" fill="#2E2A24" opacity="0.5" />
+          <rect x="14" y="36" width="100" height="3" rx="1" fill="#2E2A24" opacity="0.5" />
+          <rect x="14" y="44" width="105" height="3" rx="1" fill="#2E2A24" opacity="0.5" />
+          {/* mini chart */}
+          <g transform="translate(14 60)">
+            <line x1="0" y1="40" x2="100" y2="40" stroke="#2E2A24" strokeWidth="0.8" opacity="0.5" />
+            <path d="M 0 35 Q 20 28 40 22 T 80 8 L 100 4" fill="none" stroke={pal.b} strokeWidth="2" />
+            <circle cx="20" cy="28" r="2" fill={pal.b} />
+            <circle cx="40" cy="22" r="2" fill={pal.b} />
+            <circle cx="60" cy="14" r="2" fill={pal.b} />
+            <circle cx="80" cy="8"  r="2" fill={pal.b} />
+          </g>
+        </g>
+        {/* front paper */}
+        <g transform={`translate(150 38) rotate(${tilt2})`}>
+          <rect width="140" height="115" rx="6" fill="#FDFAF1" stroke="#2E2A24" strokeWidth="1.4" />
+          {/* highlighter streak */}
+          <rect x="14" y="22" width="92" height="9" rx="2" fill={pal.a} opacity="0.32" />
+          <rect x="14" y="14" width="92" height="6" rx="1.5" fill="#2E2A24" />
+          <rect x="14" y="26" width="80" height="3" rx="1" fill="#2E2A24" opacity="0.85" />
+          {/* protein-blob sketch */}
+          <g transform="translate(14 44)" fill="none" stroke="#2E2A24" strokeWidth="1.4" strokeLinecap="round">
+            <path d="M 6 30 Q 22 8 46 18 Q 72 28 78 8" />
+            <path d="M 78 8 Q 92 18 88 36 Q 78 50 60 46" />
+            <path d="M 60 46 L 6 46 L 6 42 L -2 50 L 6 58 L 6 54 L 60 54 Z"
+                  fill={pal.c} opacity="0.7" stroke="#2E2A24" strokeWidth="1.2" />
+            <circle cx="40" cy="28" r="3" fill={pal.b} />
+          </g>
+          <rect x="14" y="100" width="60" height="3" rx="1" fill="#2E2A24" opacity="0.45" />
+        </g>
+        {/* paperclip */}
+        <g transform={`translate(282 30) rotate(${tilt2})`} fill="none" stroke="#2E2A24" strokeWidth="1.5" strokeLinecap="round">
+          <path d="M 0 0 L 0 26 Q 0 30 4 30 L 14 30 Q 18 30 18 26 L 18 4 Q 18 0 14 0 L 8 0 Q 4 0 4 4 L 4 24" />
+        </g>
+      </svg>
+      <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-bg-card to-transparent pointer-events-none" />
     </div>
   );
 }
