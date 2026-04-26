@@ -70,6 +70,26 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      <Link
+        to="/constellation"
+        className="block bg-gradient-to-br from-jewel-topaz/20 to-jewel-emerald/10 rounded-2xl p-4 border border-jewel-topaz/20 active:opacity-80"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-eyebrow font-semibold text-jewel-topaz uppercase tracking-wider">
+              ✦ Topic Constellation — prototype
+            </div>
+            <div className="text-sm text-text-primary mt-1 font-medium">
+              See your reading as a star map
+            </div>
+            <div className="text-caption text-text-secondary mt-0.5">
+              Tag clusters, bridge papers, surprise picks.
+            </div>
+          </div>
+          <span className="text-jewel-topaz text-lg shrink-0">→</span>
+        </div>
+      </Link>
+
       <ProxyTemplateCard />
 
       <section className="bg-bg-card rounded-2xl p-4">
