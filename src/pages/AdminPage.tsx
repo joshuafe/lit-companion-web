@@ -9,6 +9,8 @@ interface Row {
   last_sign_in: string | null;
   interest_text: string | null;
   calibrated_at: string | null;
+  orcid_id: string | null;
+  proxy_configured: boolean;
   journal_count: number;
   seed_count: number;
   pending_seeds: number;
@@ -17,9 +19,22 @@ interface Row {
   pins: number;
   dismissals: number;
   briefing_count: number;
+  // pipeline health
+  pipeline_running: boolean;
+  pipeline_running_since: string | null;
+  runs_last_7d: number;
+  papers_today: number;
+  papers_yesterday: number;
+  papers_7d: number;
+  papers_with_real_image: number;
+  papers_with_generated_image: number;
+  // latest briefing
   latest_briefing_date: string | null;
   latest_briefing_has_audio: boolean;
   latest_briefing_paper_count: number;
+  latest_briefing_image_count: number;
+  latest_briefing_duration_s: number | null;
+  latest_briefing_block_count: number;
   latest_briefing_transcript: string | null;
   last_action: string | null;
   days_since_action: number | null;
@@ -37,6 +52,11 @@ interface Summary {
   total_pins: number;
   total_dismissals: number;
   total_briefings: number;
+  total_papers_with_real_image: number;
+  total_papers_with_generated_image: number;
+  total_papers_today: number;
+  total_papers_7d: number;
+  pipelines_running_now: number;
 }
 
 type SortKey =
@@ -146,23 +166,49 @@ export default function AdminPage() {
       )}
 
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
-          <Stat label="Users" value={summary.total_users} />
-          <Stat label="Active 7d" value={summary.active_7d} sub={`${summary.active_30d} / 30d`} />
-          <Stat label="Onboarded" value={summary.onboarded} sub={`of ${summary.total_users}`} />
-          <Stat label="Briefings" value={summary.total_briefings} />
-          <Stat label="Papers" value={summary.total_papers} />
-          <Stat label="Pins" value={summary.total_pins} />
-          <Stat label="Dismissals" value={summary.total_dismissals} />
-          <Stat
-            label="Action rate"
-            value={
-              summary.total_papers
-                ? fmtRate((summary.total_pins + summary.total_dismissals) / summary.total_papers)
-                : "—"
-            }
-          />
-        </div>
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+            <Stat label="Users" value={summary.total_users} />
+            <Stat label="Active 7d" value={summary.active_7d} sub={`${summary.active_30d} / 30d`} />
+            <Stat label="Onboarded" value={summary.onboarded} sub={`of ${summary.total_users}`} />
+            <Stat label="Briefings" value={summary.total_briefings} />
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+            <Stat label="Papers today" value={summary.total_papers_today} sub={`${summary.total_papers_7d} / 7d`} />
+            <Stat label="Total papers" value={summary.total_papers} />
+            <Stat label="Pins / Dismissals" value={`${summary.total_pins} / ${summary.total_dismissals}`} />
+            <Stat
+              label="Action rate"
+              value={
+                summary.total_papers
+                  ? fmtRate((summary.total_pins + summary.total_dismissals) / summary.total_papers)
+                  : "—"
+              }
+            />
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
+            <Stat
+              label="Real images"
+              value={summary.total_papers_with_real_image}
+              sub={`${summary.total_papers_with_generated_image} generated`}
+            />
+            <Stat
+              label="Image rate"
+              value={
+                (summary.total_papers_with_real_image + summary.total_papers_with_generated_image) > 0
+                  ? fmtRate(summary.total_papers_with_real_image /
+                            (summary.total_papers_with_real_image + summary.total_papers_with_generated_image))
+                  : "—"
+              }
+              sub="real ÷ total"
+            />
+            <Stat
+              label="Pipelines running"
+              value={summary.pipelines_running_now}
+              sub={summary.pipelines_running_now > 0 ? "live now" : "idle"}
+            />
+          </div>
+        </>
       )}
 
       {!loading && !error && rows.length === 0 && (
@@ -231,14 +277,20 @@ export default function AdminPage() {
                   {isOpen && (
                     <div className="px-4 py-3 bg-bg-primary/50 space-y-2 text-caption">
                       <DetailRow k="Interest" v={r.interest_text || "—"} />
+                      <DetailRow k="ORCID iD" v={r.orcid_id || "—"} />
+                      <DetailRow k="Proxy configured" v={r.proxy_configured ? "✓" : "—"} />
                       <DetailRow k="Preferred journals" v={String(r.journal_count)} />
                       <DetailRow k="Calibrated" v={r.calibrated_at ? fmtDate(r.calibrated_at) : "never"} />
+                      <DetailRow k="Pipeline status" v={r.pipeline_running ? `running since ${fmtDate(r.pipeline_running_since!)}` : "idle"} />
+                      <DetailRow k="Runs last 7d" v={String(r.runs_last_7d)} />
+                      <DetailRow k="Papers today / yesterday / 7d" v={`${r.papers_today} / ${r.papers_yesterday} / ${r.papers_7d}`} />
+                      <DetailRow k="Image source" v={`${r.papers_with_real_image} real · ${r.papers_with_generated_image} generated`} />
                       <DetailRow k="Briefings delivered" v={String(r.briefing_count)} />
                       <DetailRow
                         k="Latest briefing"
                         v={
                           r.latest_briefing_date
-                            ? `${fmtDate(r.latest_briefing_date)} · ${r.latest_briefing_paper_count} papers${r.latest_briefing_has_audio ? " · audio ✓" : ""}`
+                            ? `${fmtDate(r.latest_briefing_date)} · ${r.latest_briefing_block_count}/${r.latest_briefing_paper_count} blocks${r.latest_briefing_duration_s ? ` · ${Math.round(r.latest_briefing_duration_s)}s` : ""}${r.latest_briefing_has_audio ? " · audio ✓" : ""} · ${r.latest_briefing_image_count} images`
                             : "—"
                         }
                       />
