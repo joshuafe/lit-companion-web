@@ -306,9 +306,13 @@ export default function FeedPage() {
         </div>
       )}
 
-      {/* HERO — paper #1 gets the magazine treatment */}
+      {/* HERO — picks the freshest paper that has a real image, so the
+          banner always carries a real figure (not the generated SVG fallback).
+          Falls back to papers[0] if literally nothing has an image. */}
       {papers.length > 0 && (() => {
-        const p = papers[0];
+        const heroIdx = papers.findIndex((p) => !!p.hero_image_url);
+        const heroSliceIdx = heroIdx >= 0 ? heroIdx : 0;
+        const p = papers[heroSliceIdx];
         const chips = featureChips(p);
         const inst = p.last_author_institution || p.first_author_institution;
         return (
@@ -392,8 +396,14 @@ export default function FeedPage() {
       })()}
 
       <ul className="space-y-3">
-        {papers.slice(1).map((paperRaw, sliceIdx) => {
-          const i = sliceIdx + 1;
+        {papers
+          .map((p, idx) => ({ p, idx }))
+          .filter(({ idx }) => {
+            // Skip whichever paper got promoted to the hero card.
+            const heroIdx = papers.findIndex((p) => !!p.hero_image_url);
+            return idx !== (heroIdx >= 0 ? heroIdx : 0);
+          })
+          .map(({ p: paperRaw, idx: i }) => {
           const p = paperRaw;
           const chips = featureChips(p);
           const inst = p.last_author_institution || p.first_author_institution;
