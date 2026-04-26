@@ -45,6 +45,14 @@ interface Row {
 
 interface AuthorRank { name: string; user_count: number; }
 interface JournalRank { name: string; pins: number; user_count: number; }
+interface MetricSample {
+  ts: number;
+  cpu: number;
+  mem: number;
+  mem_gb: number | null;
+  ollama_pct: number;
+  pipeline_users: number;
+}
 
 interface Summary {
   total_users: number;
@@ -77,6 +85,7 @@ export default function AdminPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [topAuthors, setTopAuthors] = useState<AuthorRank[]>([]);
   const [topJournals, setTopJournals] = useState<JournalRank[]>([]);
+  const [metrics, setMetrics] = useState<MetricSample[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("last_action");
@@ -107,6 +116,7 @@ export default function AdminPage() {
       setSummary(data.summary || null);
       setTopAuthors(data.top_authors || []);
       setTopJournals(data.top_journals || []);
+      setMetrics(data.metrics || []);
     } catch (e: any) {
       setError(e.message);
     }
@@ -216,6 +226,23 @@ export default function AdminPage() {
             />
           </div>
         </>
+      )}
+
+      {metrics.length > 0 && (
+        <div className="bg-bg-card rounded-2xl p-4 mb-3">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
+                Mac pipeline footprint · last 24h
+              </div>
+              <div className="text-caption text-text-secondary/70 mt-0.5">
+                CPU + memory used by Literature Companion processes only — Ollama excluded.
+              </div>
+            </div>
+            <MetricsCurrent metrics={metrics} />
+          </div>
+          <MetricsChart metrics={metrics} />
+        </div>
       )}
 
       {(topAuthors.length > 0 || topJournals.length > 0) && (
@@ -367,6 +394,115 @@ export default function AdminPage() {
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+// Pipeline-only resource usage chart.
+// Renders two stacked area lines (CPU%, mem%) over a 24h window using
+// inline SVG. cpu_percent can exceed 100 because we sum across cores
+// — we soft-clamp to a per-window maximum so spikes don't compress
+// the rest of the curve into invisibility.
+function MetricsChart({ metrics }: { metrics: MetricSample[] }) {
+  const W = 720, H = 140, pad = { l: 28, r: 8, t: 6, b: 18 };
+  const innerW = W - pad.l - pad.r;
+  const innerH = H - pad.t - pad.b;
+  if (metrics.length < 2) {
+    return (
+      <div className="text-caption text-text-secondary/70 text-center py-8">
+        Need a few more samples — first chart appears after ~5 minutes.
+      </div>
+    );
+  }
+  const tMin = metrics[0].ts;
+  const tMax = metrics[metrics.length - 1].ts;
+  const xRange = Math.max(1, tMax - tMin);
+  const cpuMax = Math.max(20, ...metrics.map((m) => m.cpu)) * 1.1;
+  const memMax = Math.max(5, ...metrics.map((m) => m.mem)) * 1.2;
+  const x = (ts: number) => pad.l + ((ts - tMin) / xRange) * innerW;
+  const yCpu = (v: number) => pad.t + innerH - (Math.min(v, cpuMax) / cpuMax) * innerH;
+  const yMem = (v: number) => pad.t + innerH - (Math.min(v, memMax) / memMax) * innerH;
+
+  const cpuPath = metrics.map((m, i) =>
+    `${i === 0 ? "M" : "L"}${x(m.ts).toFixed(1)},${yCpu(m.cpu).toFixed(1)}`,
+  ).join(" ");
+  const memPath = metrics.map((m, i) =>
+    `${i === 0 ? "M" : "L"}${x(m.ts).toFixed(1)},${yMem(m.mem).toFixed(1)}`,
+  ).join(" ");
+  // Hour markers across the 24h window.
+  const ticks: { x: number; label: string }[] = [];
+  const startDate = new Date(tMin);
+  startDate.setMinutes(0, 0, 0);
+  for (let h = 0; h <= 24; h += 4) {
+    const t = startDate.getTime() + h * 3600 * 1000;
+    if (t < tMin || t > tMax) continue;
+    const d = new Date(t);
+    ticks.push({
+      x: x(t),
+      label: d.toLocaleTimeString("en-US", { hour: "numeric", hour12: true }),
+    });
+  }
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block">
+      {/* horizontal grid lines */}
+      {[0.25, 0.5, 0.75].map((p) => (
+        <line
+          key={p}
+          x1={pad.l} x2={W - pad.r}
+          y1={pad.t + innerH * p} y2={pad.t + innerH * p}
+          stroke="#2E2A24" strokeOpacity={0.06}
+        />
+      ))}
+      {/* CPU shaded area */}
+      <path
+        d={`${cpuPath} L${x(tMax).toFixed(1)},${pad.t + innerH} L${x(tMin).toFixed(1)},${pad.t + innerH} Z`}
+        fill="#3F6E55" fillOpacity={0.18}
+      />
+      <path d={cpuPath} fill="none" stroke="#3F6E55" strokeWidth={1.6} />
+      {/* Memory line (different scale, thinner so it reads as an overlay) */}
+      <path d={memPath} fill="none" stroke="#A8853A" strokeWidth={1.4} strokeDasharray="3 2" />
+      {/* X-axis labels */}
+      {ticks.map((t) => (
+        <text
+          key={t.x}
+          x={t.x} y={H - 4}
+          textAnchor="middle" fontSize="9" fill="#2E2A24" fillOpacity={0.55}
+        >
+          {t.label}
+        </text>
+      ))}
+      {/* Y-axis labels — CPU on the left */}
+      <text x={pad.l - 4} y={pad.t + 4} textAnchor="end" fontSize="9" fill="#3F6E55">
+        {Math.round(cpuMax)}%
+      </text>
+      <text x={pad.l - 4} y={pad.t + innerH} textAnchor="end" fontSize="9" fill="#3F6E55">0</text>
+      {/* legend */}
+      <g transform={`translate(${pad.l + 4} ${pad.t + 4})`}>
+        <rect width="9" height="3" y="2" fill="#3F6E55" />
+        <text x="13" y="6" fontSize="9" fill="#2E2A24">CPU%</text>
+        <line x1="48" y1="3.5" x2="58" y2="3.5" stroke="#A8853A" strokeWidth="1.4" strokeDasharray="3 2" />
+        <text x="62" y="6" fontSize="9" fill="#2E2A24">Mem%</text>
+      </g>
+    </svg>
+  );
+}
+
+function MetricsCurrent({ metrics }: { metrics: MetricSample[] }) {
+  const last = metrics[metrics.length - 1];
+  if (!last) return null;
+  return (
+    <div className="text-right">
+      <div className="text-[11px] text-text-secondary/70 uppercase tracking-wider font-semibold">
+        Now
+      </div>
+      <div className="text-sm">
+        <span className="text-jewel-emerald font-mono font-semibold">{last.cpu}%</span>
+        <span className="text-text-secondary/60 mx-1">cpu</span>
+        <span className="text-jewel-topaz font-mono font-semibold">
+          {last.mem_gb ? `${last.mem_gb} GB` : `${last.mem}%`}
+        </span>
+      </div>
     </div>
   );
 }
