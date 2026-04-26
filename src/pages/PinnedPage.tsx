@@ -3,6 +3,58 @@ import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import type { Paper } from "../lib/types";
 
+// BibTeX cite-key from first-author last name + year + first significant word.
+function bibKey(p: Paper): string {
+  const first = (p.authors?.[0] || "anon").split(/[\s,]+/)[0].toLowerCase();
+  const year = p.published_at ? new Date(p.published_at).getFullYear() : "nd";
+  const stop = new Set(["the", "a", "an", "of", "and", "in", "on", "for", "with", "to"]);
+  const word = (p.title || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, " ")
+    .split(/\s+/)
+    .find((w) => w.length >= 3 && !stop.has(w)) || "paper";
+  return `${first}${year}${word}`.replace(/[^a-z0-9]/g, "");
+}
+
+function bibEscape(s: string | null | undefined): string {
+  if (!s) return "";
+  return s.replace(/[{}\\]/g, "").replace(/&/g, "\\&").trim();
+}
+
+function paperToBibtex(p: Paper): string {
+  const key = bibKey(p);
+  const isPreprint =
+    !!p.doi?.toLowerCase().match(/biorxiv|medrxiv/) ||
+    !!p.journal?.toLowerCase().match(/biorxiv|medrxiv|preprint/);
+  const kind = isPreprint ? "@unpublished" : "@article";
+  const fields: [string, string | null | undefined][] = [
+    ["title", p.title],
+    ["author", (p.authors || []).map(bibEscape).join(" and ")],
+    ["journal", p.journal],
+    ["year", p.published_at ? String(new Date(p.published_at).getFullYear()) : null],
+    ["doi", p.doi],
+    ["url", p.url],
+    ["note", isPreprint ? "Preprint" : null],
+  ];
+  const body = fields
+    .filter(([, v]) => v != null && v !== "")
+    .map(([k, v]) => `  ${k} = {${bibEscape(v as string)}}`)
+    .join(",\n");
+  return `${kind}{${key},\n${body}\n}`;
+}
+
+function downloadText(filename: string, content: string) {
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 interface PinRow {
   paper_id: string;
   pinned_at: string;
@@ -97,6 +149,21 @@ export default function PinnedPage() {
     setTimeout(() => setFlash(null), 1500);
   }
 
+  function exportBibtex() {
+    const papers = pins.map((r) => r.papers).filter((p): p is Paper => !!p);
+    if (papers.length === 0) {
+      setFlash("Nothing to export.");
+      setTimeout(() => setFlash(null), 1500);
+      return;
+    }
+    const stamp = new Date().toISOString().slice(0, 10);
+    const header = `% Literature Companion — Pinned papers, exported ${stamp}\n% ${papers.length} entries\n\n`;
+    const body = papers.map(paperToBibtex).join("\n\n");
+    downloadText(`literature-companion-pins-${stamp}.bib`, header + body);
+    setFlash(`✓ Exported ${papers.length} entries`);
+    setTimeout(() => setFlash(null), 1800);
+  }
+
   const showRows = tab === "pinned" ? pins : dismissed;
   const empty =
     !loading &&
@@ -110,24 +177,35 @@ export default function PinnedPage() {
         Saved papers from the feed and audio briefings.
       </p>
 
-      {/* Tabs */}
-      <div className="mt-5 inline-flex bg-bg-card rounded-full p-0.5 text-[12px] font-semibold">
-        <button
-          onClick={() => setTab("pinned")}
-          className={`px-4 py-1.5 rounded-full transition ${
-            tab === "pinned" ? "bg-jewel-emerald text-white" : "text-text-secondary"
-          }`}
-        >
-          ★ Saved {pins.length > 0 && <span className="ml-1 opacity-80">{pins.length}</span>}
-        </button>
-        <button
-          onClick={() => setTab("dismissed")}
-          className={`px-4 py-1.5 rounded-full transition ${
-            tab === "dismissed" ? "bg-jewel-emerald text-white" : "text-text-secondary"
-          }`}
-        >
-          Dismissed {dismissed.length > 0 && <span className="ml-1 opacity-80">{dismissed.length}</span>}
-        </button>
+      {/* Tabs + export */}
+      <div className="mt-5 flex items-center justify-between gap-3 flex-wrap">
+        <div className="inline-flex bg-bg-card rounded-full p-0.5 text-[12px] font-semibold">
+          <button
+            onClick={() => setTab("pinned")}
+            className={`px-4 py-1.5 rounded-full transition ${
+              tab === "pinned" ? "bg-jewel-emerald text-white" : "text-text-secondary"
+            }`}
+          >
+            ★ Saved {pins.length > 0 && <span className="ml-1 opacity-80">{pins.length}</span>}
+          </button>
+          <button
+            onClick={() => setTab("dismissed")}
+            className={`px-4 py-1.5 rounded-full transition ${
+              tab === "dismissed" ? "bg-jewel-emerald text-white" : "text-text-secondary"
+            }`}
+          >
+            Dismissed {dismissed.length > 0 && <span className="ml-1 opacity-80">{dismissed.length}</span>}
+          </button>
+        </div>
+        {tab === "pinned" && pins.length > 0 && (
+          <button
+            onClick={exportBibtex}
+            className="text-[11px] font-semibold text-jewel-emerald uppercase tracking-wider px-3 py-1.5 rounded-full border border-jewel-emerald/30 hover:bg-jewel-emerald/5"
+            title="Download all pinned papers as a .bib file"
+          >
+            ⬇ BibTeX
+          </button>
+        )}
       </div>
 
       {error && <div className="mt-4 text-sm text-red-600">{error}</div>}

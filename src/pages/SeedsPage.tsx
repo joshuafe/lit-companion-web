@@ -20,6 +20,7 @@ export default function SeedsPage() {
   const [orcid, setOrcid] = useState("");
   const [orcidImporting, setOrcidImporting] = useState(false);
   const [orcidStatus, setOrcidStatus] = useState<string | null>(null);
+  const [suggestedAuthors, setSuggestedAuthors] = useState<{ name: string; pinCount: number }[]>([]);
 
   async function importFromOrcid() {
     setOrcidStatus(null);
@@ -61,13 +62,60 @@ export default function SeedsPage() {
 
   async function load() {
     setLoading(true);
-    const { data, error: err } = await supabase
-      .from("topic_seeds")
-      .select()
-      .order("created_at", { ascending: false });
+    const [{ data, error: err }, { data: pinRows }] = await Promise.all([
+      supabase
+        .from("topic_seeds")
+        .select()
+        .order("created_at", { ascending: false }),
+      // Pull the user's pinned papers' authors so we can suggest the most
+      // implicitly endorsed PIs as one-click follows.
+      supabase
+        .from("pins")
+        .select("papers(authors)")
+        .limit(200),
+    ]);
     if (err) setError(err.message);
-    setSeeds((data as Seed[]) || []);
+    const seedRows = (data as Seed[]) || [];
+    setSeeds(seedRows);
+
+    // Tally last-author (PI) appearances across pinned papers; surface only
+    // those the user hasn't already explicitly followed.
+    const alreadyFollowed = new Set(
+      seedRows.filter((s) => s.kind === "author").map((s) => s.value),
+    );
+    const counts = new Map<string, number>();
+    for (const row of (pinRows as any[]) || []) {
+      // PostgREST returns the joined `papers` row as either an object
+      // (single FK) or array depending on the relationship; tolerate both.
+      const paper = Array.isArray(row?.papers) ? row.papers[0] : row?.papers;
+      const authors: string[] | null = paper?.authors || null;
+      if (!authors?.length) continue;
+      const senior = authors[authors.length - 1];
+      if (!senior) continue;
+      counts.set(senior, (counts.get(senior) || 0) + 1);
+    }
+    const suggestions = Array.from(counts.entries())
+      .filter(([name, n]) => n >= 2 && !alreadyFollowed.has(name))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([name, pinCount]) => ({ name, pinCount }));
+    setSuggestedAuthors(suggestions);
+
     setLoading(false);
+  }
+
+  async function followSuggestedAuthor(name: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { error: err } = await supabase
+      .from("topic_seeds")
+      .insert({ user_id: user.id, kind: "author", value: name });
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    setSuggestedAuthors((s) => s.filter((a) => a.name !== name));
+    load();
   }
 
   useEffect(() => {
@@ -157,6 +205,32 @@ export default function SeedsPage() {
           this through a server-side scraper next week.)
         </div>
       </section>
+
+      {suggestedAuthors.length > 0 && (
+        <section className="bg-bg-card rounded-2xl p-4 space-y-3">
+          <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
+            Authors you keep saving
+          </div>
+          <p className="text-caption text-text-secondary">
+            Senior authors of your pinned papers. Tap to follow and surface every new paper they put out.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {suggestedAuthors.map(({ name, pinCount }) => (
+              <button
+                key={name}
+                onClick={() => followSuggestedAuthor(name)}
+                className="text-[12px] font-semibold px-3 py-1.5 rounded-full bg-bg-primary text-text-primary border border-stroke hover:border-jewel-emerald hover:text-jewel-emerald transition"
+                title={`${pinCount} pinned papers list ${name} as senior author`}
+              >
+                + {name}
+                <span className="ml-1.5 text-text-secondary/70 text-[10px]">
+                  ({pinCount} pins)
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <form onSubmit={addSeed} className="bg-bg-card rounded-2xl p-4 space-y-3">
         <div className="flex gap-2 flex-wrap">

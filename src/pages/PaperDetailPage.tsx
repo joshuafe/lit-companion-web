@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import type { Paper } from "../lib/types";
 
@@ -11,7 +11,46 @@ export default function PaperDetailPage() {
   const [pdfPath, setPdfPath] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  const [oaLoading, setOaLoading] = useState(false);
+  const [followedAuthors, setFollowedAuthors] = useState<Set<string>>(new Set());
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const navigate = useNavigate();
+
+  // Keyboard shortcuts: p toggles pin, esc returns to feed, [/] step through
+  // the recent paper list cached on the feed (sequential nav inside the
+  // current session). Skipped when typing or focused inside an input.
+  useEffect(() => {
+    function isTyping() {
+      const t = document.activeElement;
+      const tag = t?.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || (t as HTMLElement | null)?.isContentEditable;
+    }
+    async function step(direction: 1 | -1) {
+      // Pull a small ordered slice; we don't have a session-cached list so
+      // ask supabase for the same ordering FeedPage uses (relevance desc).
+      const { data } = await supabase
+        .from("papers")
+        .select("id")
+        .order("relevance_score", { ascending: false })
+        .limit(60);
+      const ids = ((data as { id: string }[]) || []).map((p) => p.id);
+      const idx = paper ? ids.indexOf(paper.id) : -1;
+      if (idx < 0) return;
+      const nextIdx = idx + direction;
+      if (nextIdx < 0 || nextIdx >= ids.length) return;
+      navigate(`/paper/${ids[nextIdx]}`);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (isTyping() || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "Escape") { e.preventDefault(); navigate("/"); }
+      else if (e.key === "p") { e.preventDefault(); togglePin(); }
+      else if (e.key === "]") { e.preventDefault(); step(1); }
+      else if (e.key === "[") { e.preventDefault(); step(-1); }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paper, pinned]);
 
   useEffect(() => {
     if (!id) return;
@@ -38,8 +77,31 @@ export default function PaperDetailPage() {
           .list(u.id, { search: `${id}.pdf` });
         if (list?.some((f) => f.name === `${id}.pdf`)) setPdfPath(key);
       }
+      const { data: seedRows } = await supabase
+        .from("topic_seeds")
+        .select("value")
+        .eq("kind", "author");
+      setFollowedAuthors(
+        new Set(((seedRows as { value: string }[]) || []).map((r) => r.value)),
+      );
     })();
   }, [id]);
+
+  async function followAuthor(displayName: string) {
+    const u = (await supabase.auth.getUser()).data.user;
+    if (!u) return;
+    const { error: err } = await supabase
+      .from("topic_seeds")
+      .insert({ user_id: u.id, kind: "author", value: displayName });
+    if (err) {
+      setFlash(`Couldn't follow: ${err.message}`);
+    } else {
+      setFollowedAuthors((s) => new Set(s).add(displayName));
+      setFlash(`+ Following ${displayName} — new papers will surface`);
+      if (navigator.vibrate) navigator.vibrate([10, 20, 10]);
+    }
+    setTimeout(() => setFlash(null), 2400);
+  }
 
   async function togglePin() {
     if (!paper) return;
@@ -101,6 +163,86 @@ export default function PaperDetailPage() {
     setTimeout(() => setFlash(null), 2400);
   }
 
+  async function findOpenAccess() {
+    if (!paper?.doi) {
+      setFlash("No DOI on this paper — can't query Unpaywall.");
+      setTimeout(() => setFlash(null), 2000);
+      return;
+    }
+    setOaLoading(true);
+    try {
+      // Unpaywall asks for a contact email per ToS; this is the project's.
+      const res = await fetch(
+        `https://api.unpaywall.org/v2/${encodeURIComponent(paper.doi)}?email=joshuafein@gmail.com`,
+      );
+      if (!res.ok) throw new Error(`Unpaywall ${res.status}`);
+      const body = await res.json();
+      const oa =
+        body?.best_oa_location?.url_for_pdf ||
+        body?.best_oa_location?.url ||
+        null;
+      if (oa) {
+        window.open(oa, "_blank", "noopener,noreferrer");
+        setFlash(`Opening open-access copy${body.best_oa_location.host_type ? ` (${body.best_oa_location.host_type})` : ""}`);
+      } else {
+        setFlash("No open-access version found.");
+      }
+    } catch (e: any) {
+      setFlash(`Unpaywall lookup failed: ${e.message}`);
+    }
+    setOaLoading(false);
+    setTimeout(() => setFlash(null), 2400);
+  }
+
+  async function sharePaper() {
+    if (!paper) return;
+    const target = paper.url || (paper.doi ? `https://doi.org/${paper.doi}` : "");
+    const blurb = paper.summary?.tldr || paper.title;
+    const text = `${paper.title}\n\n${blurb}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: paper.title, text, url: target });
+        return;
+      } catch (e: any) {
+        if (e?.name === "AbortError") return; // user cancelled
+        // fall through to copy fallback
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(`${text}\n${target}`);
+      setFlash("✓ Copied — paste anywhere");
+    } catch {
+      setFlash("Couldn't share or copy.");
+    }
+    setTimeout(() => setFlash(null), 1800);
+  }
+
+  async function copyCitation() {
+    if (!paper) return;
+    // Vancouver-ish: "Authors. Title. Journal. Year;Vol(Issue):pages. doi:X"
+    // We don't store volume/issue/pages; degrade gracefully.
+    const authors = (paper.authors || []).slice(0, 6).join(", ") +
+      (paper.authors?.length > 6 ? ", et al" : "");
+    const year = paper.published_at
+      ? new Date(paper.published_at).getFullYear()
+      : "";
+    const parts = [
+      authors ? `${authors}.` : "",
+      paper.title ? `${paper.title.replace(/[.\s]+$/, "")}.` : "",
+      paper.journal ? `${paper.journal}.` : "",
+      year ? `${year}.` : "",
+      paper.doi ? `doi:${paper.doi}` : "",
+    ].filter(Boolean);
+    const cite = parts.join(" ");
+    try {
+      await navigator.clipboard.writeText(cite);
+      setFlash("✓ Citation copied");
+    } catch {
+      setFlash("Couldn't copy — long-press to select instead.");
+    }
+    setTimeout(() => setFlash(null), 1800);
+  }
+
   async function viewPdf() {
     if (!pdfPath) return;
     const { data, error } = await supabase.storage
@@ -133,6 +275,41 @@ export default function PaperDetailPage() {
         {paper.authors?.length > 8 ? ", et al." : ""}
         {inst && <span className="text-text-secondary/80"> · {inst}</span>}
       </div>
+
+      {/* Follow first / last author chips. Senior author (last) is usually
+          the PI — most useful target for "follow this lab". First-author also
+          surfaced because trainees are mobile and worth tracking. */}
+      {paper.authors && paper.authors.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {Array.from(new Set([
+            paper.authors[paper.authors.length - 1],
+            paper.authors[0],
+          ].filter(Boolean))).map((author) => {
+            const following = followedAuthors.has(author);
+            const isSenior = author === paper.authors[paper.authors.length - 1];
+            return (
+              <button
+                key={author}
+                disabled={following}
+                onClick={() => followAuthor(author)}
+                className={`text-[11px] font-semibold px-2.5 py-1 rounded-full transition ${
+                  following
+                    ? "bg-jewel-emerald/15 text-jewel-emerald cursor-default"
+                    : "bg-bg-card text-text-secondary hover:text-text-primary border border-stroke"
+                }`}
+                title={following ? "Already following" : `Add ${author} as a seed`}
+              >
+                {following ? "✓ following" : "+ follow"} {author}
+                {isSenior && !following && (
+                  <span className="ml-1 text-text-secondary/60 text-[9px] uppercase tracking-wider">
+                    PI
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {s ? (
         <>
@@ -219,6 +396,16 @@ export default function PaperDetailPage() {
             <span>{proxyTemplate ? "Open via my institutional proxy" : "Set up institutional proxy →"}</span>
             <span className="opacity-60">↗</span>
           </button>
+          {paper.doi && (
+            <button
+              onClick={findOpenAccess}
+              disabled={oaLoading}
+              className="w-full flex items-center justify-between bg-bg-card text-text-primary rounded-xl px-4 py-3 text-sm font-medium active:opacity-80 border border-stroke disabled:opacity-50"
+            >
+              <span>{oaLoading ? "Searching Unpaywall…" : "Find open-access copy"}</span>
+              <span className="opacity-60">🔓</span>
+            </button>
+          )}
           {pdfPath ? (
             <button
               onClick={viewPdf}
@@ -237,6 +424,22 @@ export default function PaperDetailPage() {
               <span className="opacity-60">⬆</span>
             </button>
           )}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={copyCitation}
+              className="flex items-center justify-between bg-bg-card text-text-primary rounded-xl px-4 py-3 text-sm font-medium active:opacity-80 border border-stroke"
+            >
+              <span>Copy citation</span>
+              <span className="opacity-60">⎘</span>
+            </button>
+            <button
+              onClick={sharePaper}
+              className="flex items-center justify-between bg-bg-card text-text-primary rounded-xl px-4 py-3 text-sm font-medium active:opacity-80 border border-stroke"
+            >
+              <span>Share</span>
+              <span className="opacity-60">↗</span>
+            </button>
+          </div>
           <input
             ref={fileRef}
             type="file"

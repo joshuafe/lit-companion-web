@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import type { Paper } from "../lib/types";
+import type { Paper, Briefing } from "../lib/types";
+import TIER_1_RAW from "../lib/tier1Journals.json";
 
 const LONG_PRESS_MS = 500;
 
@@ -54,28 +55,14 @@ const NON_RESEARCH_PREFIXES = [
   "publisher correction:",
 ];
 
-// Mirror of ranking/journals.py TIER_1. Keep these in sync.
-const TIER_1_NORM = new Set<string>([
-  "nature", "cell", "science", "n engl j med", "new england journal of medicine",
-  "blood", "blood adv", "blood advances", "blood neoplasia",
-  "j clin oncol", "journal of clinical oncology",
-  "bone marrow transplant", "bone marrow transplantation",
-  "transplant cell ther", "transplantation and cellular therapy",
-  "leukemia", "exp hematol", "experimental hematology",
-  "am j hematol", "american journal of hematology",
-  "immunity", "j exp med", "journal of experimental medicine",
-  "nat immunol", "nature immunology",
-  "nat rev immunol", "nature reviews immunology",
-  "nat med", "nature medicine",
-  "j clin invest", "journal of clinical investigation",
-  "jci insight",
-  "lancet haematol", "lancet haematology",
-  "nejm evidence",
-  "cancer discov", "cancer discovery",
-  "cancer cell",
-  "lancet oncol", "lancet oncology",
-  "jama oncol", "jama oncology",
-]);
+// Single source of truth lives at clients/web/src/lib/tier1Journals.json,
+// also loaded by ranking/journals.py — TS and Python can never drift.
+function _normJournal(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+}
+const TIER_1_NORM: Set<string> = new Set(
+  (TIER_1_RAW as string[]).map(_normJournal),
+);
 function isTier1(journal: string | null | undefined): boolean {
   if (!journal) return false;
   const n = journal.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
@@ -107,6 +94,14 @@ function isJunk(title: string | null | undefined): boolean {
 function stripHtml(s: string | null | undefined): string {
   if (!s) return "";
   return s.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function isToday(d: string | null | undefined): boolean {
+  if (!d) return false;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const dd = new Date(d.length === 10 ? d + "T00:00:00" : d);
+  dd.setHours(0, 0, 0, 0);
+  return today.getTime() === dd.getTime();
 }
 
 function fmtDate(iso: string | null | undefined): string {
@@ -166,6 +161,10 @@ export default function FeedPage() {
   const [flash, setFlash] = useState<string | null>(null);
   const [burstPaperId, setBurstPaperId] = useState<string | null>(null);
   const [newSinceLast, setNewSinceLast] = useState<number>(0);
+  const [authorSeeds, setAuthorSeeds] = useState<string[]>([]);
+  const [whyPaper, setWhyPaper] = useState<Paper | null>(null);
+  const [focusedIdx, setFocusedIdx] = useState<number>(-1);
+  const [todayBriefing, setTodayBriefing] = useState<Briefing | null>(null);
   const longPressTimer = useRef<number | null>(null);
   const longPressed = useRef(false);
   const navigate = useNavigate();
@@ -174,7 +173,7 @@ export default function FeedPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const { error: err } = await supabase.from("pins").upsert(
-      { user_id: user.id, paper_id: p.id, note: "saved for later (long-press)" },
+      { user_id: user.id, paper_id: p.id },
       { onConflict: "user_id,paper_id" },
     );
     if (err) {
@@ -218,7 +217,7 @@ export default function FeedPage() {
       .toISOString().slice(0, 10);
     // Ping the visit RPC alongside the data fetch so streak + new-since
     // counts are always fresh on Feed open.
-    const [{ data: rows, error: err1 }, { data: pins }, visit] = await Promise.all([
+    const [{ data: rows, error: err1 }, { data: pins }, visit, { data: seedRows }, { data: brief }] = await Promise.all([
       supabase
         .from("papers")
         .select("*", { count: "exact" })
@@ -227,7 +226,16 @@ export default function FeedPage() {
         .limit(60),
       supabase.from("pins").select("paper_id"),
       supabase.rpc("ping_visit"),
+      supabase.from("topic_seeds").select("value").eq("kind", "author"),
+      supabase
+        .from("briefings")
+        .select()
+        .order("briefing_date", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
+    setTodayBriefing((brief as Briefing | null) || null);
+    setAuthorSeeds(((seedRows as { value: string }[]) || []).map((r) => r.value));
     if (err1) setError(err1.message);
     if (visit?.data && Array.isArray(visit.data) && visit.data.length > 0) {
       const v = visit.data[0] as { prev_last_seen: string | null };
@@ -272,6 +280,48 @@ export default function FeedPage() {
 
   useEffect(() => { load(); }, []);
 
+  // Keyboard navigation: j/k = next/prev, Enter = open, p = pin/unpin,
+  // ? = open the why-modal for the focused card. Disabled while a modal
+  // is open or when typing in any input (to avoid intercepting form chars).
+  useEffect(() => {
+    function isTyping() {
+      const t = document.activeElement;
+      const tag = t?.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || (t as HTMLElement | null)?.isContentEditable;
+    }
+    function onKey(e: KeyboardEvent) {
+      if (whyPaper) return;
+      if (isTyping()) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (papers.length === 0) return;
+      if (e.key === "j") {
+        e.preventDefault();
+        setFocusedIdx((i) => Math.min(papers.length - 1, (i < 0 ? 0 : i + 1)));
+      } else if (e.key === "k") {
+        e.preventDefault();
+        setFocusedIdx((i) => Math.max(0, (i < 0 ? 0 : i - 1)));
+      } else if (e.key === "Enter" && focusedIdx >= 0) {
+        e.preventDefault();
+        navigate(`/paper/${papers[focusedIdx].id}`);
+      } else if (e.key === "p" && focusedIdx >= 0) {
+        e.preventDefault();
+        pinForLater(papers[focusedIdx]);
+      } else if (e.key === "?" && focusedIdx >= 0) {
+        e.preventDefault();
+        setWhyPaper(papers[focusedIdx]);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [papers, focusedIdx, whyPaper, navigate]);
+
+  // Scroll the focused card into view when it changes.
+  useEffect(() => {
+    if (focusedIdx < 0 || !papers[focusedIdx]) return;
+    const el = document.getElementById(`feed-card-${papers[focusedIdx].id}`);
+    if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [focusedIdx, papers]);
+
   // Percentile rank of each paper within the CURRENT feed, so the pill
   // color reflects relative strength (not raw cosine — which compresses
   // into the high 90s for related-topic corpora).
@@ -298,9 +348,20 @@ export default function FeedPage() {
           {loading ? "Today" : morningGreeting(papers)}
         </h1>
         <p className="text-caption text-text-secondary mt-1">
-          {loading
-            ? "Loading your feed…"
-            : `${papers.length} papers · latest first, then relevance`}
+          {loading ? "Loading your feed…" : (
+            <>
+              {papers.length} papers · latest first, then relevance
+              {papers[0]?.created_at && (
+                <span className="text-text-secondary/70">
+                  {" · last refresh "}
+                  {fmtDate(papers
+                    .map((p) => p.created_at || "")
+                    .sort()
+                    .reverse()[0])}
+                </span>
+              )}
+            </>
+          )}
         </p>
       </header>
 
@@ -315,12 +376,26 @@ export default function FeedPage() {
       )}
 
       {!loading && papers.length === 0 && (
-        <div className="text-center py-16">
+        <div className="text-center py-12 px-4">
           <div className="text-4xl mb-3">📂</div>
-          <p className="text-text-primary font-medium mb-1">Your feed is quiet</p>
-          <p className="text-caption text-text-secondary">
-            The pipeline will populate it on the next nightly run.
+          <p className="text-text-primary font-medium mb-2">Your feed is quiet</p>
+          <p className="text-caption text-text-secondary mb-5 max-w-xs mx-auto">
+            The pipeline ranks new papers against your seeds. Add a few to bootstrap it — usually populates within an hour.
           </p>
+          <div className="flex flex-col sm:flex-row gap-2 justify-center max-w-xs mx-auto">
+            <Link
+              to="/settings/seeds"
+              className="px-4 py-2.5 rounded-xl bg-jewel-emerald text-white text-sm font-semibold active:opacity-80"
+            >
+              + Add seeds
+            </Link>
+            <Link
+              to="/settings/journals"
+              className="px-4 py-2.5 rounded-xl bg-bg-card text-text-primary text-sm font-semibold border border-stroke active:opacity-80"
+            >
+              Pick journals
+            </Link>
+          </div>
         </div>
       )}
 
@@ -413,6 +488,40 @@ export default function FeedPage() {
         );
       })()}
 
+      {whyPaper && (
+        <WhyModal
+          paper={whyPaper}
+          authorSeeds={authorSeeds}
+          onClose={() => setWhyPaper(null)}
+        />
+      )}
+
+      {/* Today's briefing preview — only when audio is ready and the
+          briefing covers today (don't tease yesterday's run). */}
+      {todayBriefing?.audio_path && isToday(todayBriefing.briefing_date) && (
+        <Link
+          to="/briefing"
+          className="block mb-4 bg-gradient-to-br from-jewel-emerald to-jewel-emerald/80 text-white rounded-card p-4 active:opacity-90 shadow-sm"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-eyebrow font-semibold uppercase tracking-wider opacity-80">
+                Today's briefing — ready
+              </div>
+              <div className="mt-0.5 text-[15px] font-semibold leading-snug">
+                {(todayBriefing.paper_ids || []).length} papers ·{" "}
+                {todayBriefing.script_json?.audio_duration
+                  ? `${Math.round(todayBriefing.script_json.audio_duration / 60)} min listen`
+                  : "audio ready"}
+              </div>
+            </div>
+            <div className="shrink-0 w-11 h-11 rounded-full bg-white/20 flex items-center justify-center text-xl">
+              ▶
+            </div>
+          </div>
+        </Link>
+      )}
+
       <ul className="space-y-3">
         {papers
           .map((p, idx) => ({ p, idx }))
@@ -426,7 +535,7 @@ export default function FeedPage() {
           const chips = featureChips(p);
           const inst = p.last_author_institution || p.first_author_institution;
           return (
-            <li key={p.id}>
+            <li key={p.id} id={`feed-card-${p.id}`}>
               <div
                 role="button"
                 tabIndex={0}
@@ -440,7 +549,11 @@ export default function FeedPage() {
                 onMouseUp={cancelLongPress}
                 onMouseLeave={cancelLongPress}
                 onContextMenu={(e) => { e.preventDefault(); pinForLater(p); }}
-                className="block bg-bg-card rounded-card overflow-hidden active:opacity-80 transition cursor-pointer select-none"
+                className={`block bg-bg-card rounded-card overflow-hidden active:opacity-80 transition cursor-pointer select-none ${
+                  papers[focusedIdx]?.id === p.id
+                    ? "ring-2 ring-jewel-emerald ring-offset-2 ring-offset-bg-primary"
+                    : ""
+                }`}
               >
                 <div className="p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -457,7 +570,18 @@ export default function FeedPage() {
                       </span>
                     )}
                   </span>
-                  <RelevancePill rank={rankByIndex[i]} total={papers.length} />
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <RelevancePill rank={rankByIndex[i]} total={papers.length} />
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setWhyPaper(p); }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      aria-label="Why am I seeing this?"
+                      className="text-text-secondary/60 hover:text-text-primary text-[11px] w-5 h-5 rounded-full border border-text-secondary/30 flex items-center justify-center"
+                    >
+                      ?
+                    </button>
+                  </div>
                 </div>
 
                 <h2 className="mt-2 text-[17px] font-semibold leading-snug text-text-primary line-clamp-3">
@@ -629,6 +753,125 @@ function HeroIllustration({ paper }: { paper: Paper }) {
         </g>
       </svg>
       <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-bg-card to-transparent pointer-events-none" />
+    </div>
+  );
+}
+
+function WhyModal({
+  paper,
+  authorSeeds,
+  onClose,
+}: {
+  paper: Paper;
+  authorSeeds: string[];
+  onClose: () => void;
+}) {
+  // Match seeded authors against paper authors. PubMed format is "Lastname II"
+  // (e.g. "Hanash AM"). We compare on lastname (first token, lowercased).
+  const paperLastNames = new Set(
+    (paper.authors || []).map((a) => (a.split(/[\s,]+/)[0] || "").toLowerCase()),
+  );
+  const matchedAuthors = authorSeeds.filter((s) =>
+    paperLastNames.has((s.split(/[\s,]+/)[0] || "").toLowerCase()),
+  );
+  const tier1 = isTier1(paper.journal);
+  const score = paper.relevance_score;
+  const reason = paper.summary?.relevance?.reason;
+  const tags = paper.summary?.tags_suggested || [];
+
+  return (
+    <div
+      className="fixed inset-0 z-30 bg-text-primary/40 flex items-end sm:items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md bg-bg-card rounded-card p-5 space-y-4 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="text-lg font-semibold text-text-primary">
+            Why you're seeing this
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-text-secondary text-xl leading-none px-1"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        <Row label="Journal tier">
+          {tier1 ? (
+            <span className="text-jewel-topaz font-medium">
+              ★ Top-tier — included by default
+            </span>
+          ) : (
+            <span className="text-text-secondary">
+              Discovery — outside your top-journal list, surfaced by relevance or author match
+            </span>
+          )}
+          {paper.journal && (
+            <span className="text-text-secondary"> · {paper.journal}</span>
+          )}
+        </Row>
+
+        {typeof score === "number" && (
+          <Row label="Relevance">
+            <span className="font-mono text-text-primary">
+              {(score * 100).toFixed(1)}%
+            </span>
+            <span className="text-text-secondary"> cosine to your seeds</span>
+          </Row>
+        )}
+
+        {matchedAuthors.length > 0 && (
+          <Row label="Followed authors on this paper">
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {matchedAuthors.map((a) => (
+                <span
+                  key={a}
+                  className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-jewel-emerald/15 text-jewel-emerald"
+                >
+                  {a}
+                </span>
+              ))}
+            </div>
+          </Row>
+        )}
+
+        {reason && (
+          <Row label="Editorial note">
+            <span className="text-text-primary">{reason}</span>
+          </Row>
+        )}
+
+        {tags.length > 0 && (
+          <Row label="Tags">
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {tags.slice(0, 6).map((t) => (
+                <span
+                  key={t}
+                  className="text-[11px] px-2 py-0.5 rounded-full bg-bg-primary text-text-secondary"
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+          </Row>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider mb-0.5">
+        {label}
+      </div>
+      <div className="text-sm">{children}</div>
     </div>
   );
 }
