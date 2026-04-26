@@ -42,6 +42,48 @@ async function extractDoiFromPdf(file: File): Promise<string | null> {
   return null;
 }
 
+// Resolve a user-pasted DOI or URL into a bare DOI string.
+// Handles: doi.org URLs, raw DOIs, PubMed URLs, biorxiv/medrxiv URLs.
+// Returns null when we can't resolve client-side (CORS-blocked publisher
+// pages); caller should ask the user for a DOI directly.
+async function resolveToDoi(input: string): Promise<string | null> {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  // 1. Already a DOI (raw or doi.org URL)
+  const bareDoi = trimmed.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "");
+  if (/^10\.\d{4,9}\//.test(bareDoi)) return bareDoi;
+
+  // 2. PubMed URL → PMID → eutils → DOI
+  const pmidMatch = trimmed.match(/pubmed\.ncbi\.nlm\.nih\.gov\/(\d+)/i);
+  if (pmidMatch) {
+    const pmid = pmidMatch[1];
+    try {
+      const res = await fetch(
+        `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmid}&retmode=json`,
+      );
+      const body = await res.json();
+      const rec = body?.result?.[pmid];
+      const doiId = (rec?.articleids || []).find(
+        (a: any) => a.idtype === "doi",
+      );
+      return doiId?.value || null;
+    } catch {
+      return null;
+    }
+  }
+
+  // 3. biorxiv / medrxiv URL — DOI is in the path
+  const bioMatch = trimmed.match(/(?:biorxiv|medrxiv)\.org\/content\/(10\.1101\/[^?#]+?)(?:v\d+)?(?:\.full)?(?:\.pdf)?(?:[?#]|$)/i);
+  if (bioMatch) return bioMatch[1].replace(/\/$/, "");
+
+  // 4. Generic URL with a DOI in the path or query string
+  const urlDoi = trimmed.match(DOI_RE);
+  if (urlDoi) return urlDoi[1].replace(/[.,;]+$/, "");
+
+  return null;
+}
+
 async function lookupCrossref(doi: string): Promise<Metadata | null> {
   // Crossref is free, no API key, polite-rate-limited if you set a UA.
   const res = await fetch(
@@ -134,12 +176,20 @@ export default function AddPaperPage() {
   }
 
   async function lookupManually() {
-    const trimmed = doi.trim().replace(/^https?:\/\/doi\.org\//i, "");
-    if (!trimmed) return;
+    if (!doi.trim()) return;
     setExtracting(true);
     setError(null);
     try {
-      const m = await lookupCrossref(trimmed);
+      const resolved = await resolveToDoi(doi);
+      if (!resolved) {
+        setError(
+          "Couldn't resolve that to a DOI. Paste the DOI directly, or use a doi.org / PubMed / bioRxiv URL.",
+        );
+        setExtracting(false);
+        return;
+      }
+      setDoi(resolved);
+      const m = await lookupCrossref(resolved);
       if (m) applyMeta(m);
       else setError("Crossref had no record for that DOI. You can still save manually.");
     } catch (e: any) {
@@ -321,16 +371,20 @@ export default function AddPaperPage() {
         />
       </section>
 
-      {/* Step 2: DOI manual entry / fallback */}
+      {/* Step 2: DOI / URL — works without a PDF too */}
       <section className="bg-bg-card rounded-2xl p-4 space-y-3">
         <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
-          DOI {meta ? "✓ found" : extracting ? "(searching…)" : "(or paste manually)"}
+          {meta ? "DOI ✓ found" : "Or paste a DOI / URL"}
         </div>
+        <p className="text-caption text-text-secondary">
+          DOI, doi.org link, PubMed page, or bioRxiv URL all work. PDF is optional.
+        </p>
         <div className="flex gap-2">
           <input
             value={doi}
             onChange={(e) => setDoi(e.target.value)}
-            placeholder="10.1182/blood.2024023456"
+            onKeyDown={(e) => { if (e.key === "Enter") lookupManually(); }}
+            placeholder="10.1182/… or pubmed.ncbi.nlm.nih.gov/12345"
             className="flex-1 rounded-xl bg-bg-primary px-3 py-2.5 text-sm font-mono text-text-primary placeholder:text-text-secondary/60 border border-transparent focus:border-jewel-emerald focus:outline-none"
           />
           <button
@@ -338,7 +392,7 @@ export default function AddPaperPage() {
             disabled={extracting || !doi.trim()}
             className="px-4 rounded-xl bg-jewel-emerald text-white text-sm font-semibold disabled:opacity-50"
           >
-            Look up
+            {extracting ? "…" : "Look up"}
           </button>
         </div>
       </section>
