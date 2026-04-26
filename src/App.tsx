@@ -9,6 +9,7 @@ import BriefingPage from "./pages/BriefingPage";
 import SettingsPage from "./pages/SettingsPage";
 import SeedsPage from "./pages/SeedsPage";
 import JournalsPage from "./pages/JournalsPage";
+import PinnedPage from "./pages/PinnedPage";
 import AdminPage from "./pages/AdminPage";
 import AdminUserDetailPage from "./pages/AdminUserDetailPage";
 
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/" element={<FeedPage />} />
           <Route path="/paper/:id" element={<PaperDetailPage />} />
           <Route path="/briefing" element={<BriefingPage />} />
+          <Route path="/library" element={<PinnedPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/seeds" element={<SeedsPage />} />
           <Route path="/settings/journals" element={<JournalsPage />} />
@@ -62,6 +64,7 @@ function TabBar() {
   const tabs = [
     { to: "/", label: "Feed", icon: "📰" },
     { to: "/briefing", label: "Briefing", icon: "🎧" },
+    { to: "/library", label: "Library", icon: "★" },
     { to: "/settings", label: "Settings", icon: "⚙︎" },
   ];
   return (
@@ -77,7 +80,7 @@ function TabBar() {
               key={t.to}
               to={t.to}
               className={`flex-1 flex flex-col items-center py-2 text-[11px] font-medium ${
-                active ? "text-accent" : "text-text-secondary"
+                active ? "text-jewel-emerald" : "text-text-secondary"
               }`}
             >
               <span className="text-lg leading-none">{t.icon}</span>

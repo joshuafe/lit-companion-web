@@ -69,6 +69,12 @@ const TIER_1_NORM = new Set<string>([
   "nat med", "nature medicine",
   "j clin invest", "journal of clinical investigation",
   "jci insight",
+  "lancet haematol", "lancet haematology",
+  "nejm evidence",
+  "cancer discov", "cancer discovery",
+  "cancer cell",
+  "lancet oncol", "lancet oncology",
+  "jama oncol", "jama oncology",
 ]);
 function isTier1(journal: string | null | undefined): boolean {
   if (!journal) return false;
