@@ -16,6 +16,7 @@ import OnboardingPage from "./pages/OnboardingPage";
 import ConstellationPage from "./pages/ConstellationPage";
 import AddPaperPage from "./pages/AddPaperPage";
 import LatestPage from "./pages/LatestPage";
+import TocPage from "./pages/TocPage";
 import SearchModal from "./components/SearchModal";
 
 export default function App() {
@@ -99,6 +100,7 @@ export default function App() {
           <Route path="/library" element={<PinnedPage />} />
           <Route path="/library/add" element={<AddPaperPage />} />
           <Route path="/latest" element={<LatestPage />} />
+          <Route path="/toc" element={<TocPage />} />
           <Route path="/constellation" element={<ConstellationPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/seeds" element={<SeedsPage />} />

@@ -109,12 +109,23 @@ export default function LatestPage() {
 
   return (
     <div className="max-w-lg mx-auto px-5 pt-10 pb-32">
-      <h1 className="text-[34px] font-semibold text-text-primary leading-tight">
-        Latest
-      </h1>
-      <p className="text-caption text-text-secondary mt-1">
-        Newest papers from your top journals — reverse-chronological, no ranking.
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-[34px] font-semibold text-text-primary leading-tight">
+            Latest
+          </h1>
+          <p className="text-caption text-text-secondary mt-1">
+            Newest papers from your top journals — reverse-chronological, no ranking.
+          </p>
+        </div>
+        <Link
+          to="/toc"
+          className="shrink-0 mt-2 px-3 py-1.5 rounded-full bg-bg-card border border-jewel-emerald/30 text-jewel-emerald text-[11px] font-semibold uppercase tracking-wider"
+          title="Live TOC pulled from each journal's RSS feed"
+        >
+          Live TOC →
+        </Link>
+      </div>
 
       {preferredJournals.length === 0 && (
         <div className="mt-6 bg-bg-card rounded-2xl p-4 text-caption text-text-secondary">
