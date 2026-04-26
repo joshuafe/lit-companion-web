@@ -43,6 +43,9 @@ interface Row {
   action_rate: number;
 }
 
+interface AuthorRank { name: string; user_count: number; }
+interface JournalRank { name: string; pins: number; user_count: number; }
+
 interface Summary {
   total_users: number;
   active_7d: number;
@@ -72,6 +75,8 @@ type SortKey =
 export default function AdminPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [topAuthors, setTopAuthors] = useState<AuthorRank[]>([]);
+  const [topJournals, setTopJournals] = useState<JournalRank[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("last_action");
@@ -100,6 +105,8 @@ export default function AdminPage() {
       const data = await res.json();
       setRows(data.rows || []);
       setSummary(data.summary || null);
+      setTopAuthors(data.top_authors || []);
+      setTopJournals(data.top_journals || []);
     } catch (e: any) {
       setError(e.message);
     }
@@ -209,6 +216,51 @@ export default function AdminPage() {
             />
           </div>
         </>
+      )}
+
+      {(topAuthors.length > 0 || topJournals.length > 0) && (
+        <div className="grid md:grid-cols-2 gap-3 mb-4">
+          {topAuthors.length > 0 && (
+            <div className="bg-bg-card rounded-2xl p-4">
+              <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider mb-2">
+                Most-followed authors
+              </div>
+              <ul className="space-y-1.5">
+                {topAuthors.map((a) => (
+                  <li key={a.name} className="flex items-center justify-between text-sm">
+                    <span className="text-text-primary truncate">{a.name}</span>
+                    <span className="text-jewel-emerald font-semibold ml-2 shrink-0">
+                      {a.user_count}
+                      <span className="text-text-secondary/70 font-normal ml-0.5">
+                        {a.user_count === 1 ? "user" : "users"}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {topJournals.length > 0 && (
+            <div className="bg-bg-card rounded-2xl p-4">
+              <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider mb-2">
+                Most-pinned journals
+              </div>
+              <ul className="space-y-1.5">
+                {topJournals.map((j) => (
+                  <li key={j.name} className="flex items-center justify-between text-sm">
+                    <span className="text-text-primary truncate">{j.name}</span>
+                    <span className="text-jewel-topaz font-semibold ml-2 shrink-0">
+                      {j.pins}
+                      <span className="text-text-secondary/70 font-normal ml-0.5">
+                        pins · {j.user_count}u
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       )}
 
       {!loading && !error && rows.length === 0 && (

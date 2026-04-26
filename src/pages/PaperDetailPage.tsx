@@ -264,8 +264,11 @@ export default function PaperDetailPage() {
     <div className="max-w-lg mx-auto px-5 pt-6 pb-32">
       <Link to="/" className="text-jewel-emerald text-sm font-medium">‹ Feed</Link>
 
-      <div className="mt-4 text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
-        {paper.journal || ""}
+      <div className="mt-4 flex items-center gap-2">
+        <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
+          {paper.journal || ""}
+        </div>
+        <VersionTag paper={paper} />
       </div>
       <h1 className="mt-2 text-[22px] font-semibold leading-snug text-text-primary">
         {paper.title}
@@ -484,6 +487,37 @@ export default function PaperDetailPage() {
       )}
     </div>
   );
+}
+
+// Tiny chip that classifies the paper as preprint / published / manuscript.
+// Signals (in priority order):
+//   1. published_doi set on this row → this paper IS the preprint, mark as such
+//   2. journal/DOI matches biorxiv/medrxiv → preprint
+//   3. preprint_doi set OR has DOI + journal → published
+//   4. fallback → no chip (don't show on records we can't classify)
+function VersionTag({ paper }: { paper: Paper }) {
+  const journal = (paper.journal || "").toLowerCase();
+  const doi = (paper.doi || "").toLowerCase();
+  const isPreprintByDoi = doi.includes("10.1101/");
+  const isPreprintByJournal = /biorxiv|medrxiv|preprint/.test(journal);
+  const isPreprint = !!paper.published_doi || isPreprintByDoi || isPreprintByJournal;
+  const isPublished = !isPreprint && !!paper.doi && !!paper.journal;
+
+  if (isPreprint) {
+    return (
+      <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-jewel-topaz/15 text-jewel-topaz">
+        ○ preprint
+      </span>
+    );
+  }
+  if (isPublished) {
+    return (
+      <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-jewel-emerald/15 text-jewel-emerald">
+        ✓ published
+      </span>
+    );
+  }
+  return null;
 }
 
 // Cross-link banner: shown when this paper is the preprint of a now-

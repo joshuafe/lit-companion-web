@@ -171,11 +171,30 @@ export default function BriefingPage() {
       .upsert({ user_id: user.id, paper_id: activePaper.id });
     if (err) {
       setPinFlash(`Error: ${err.message}`);
-    } else {
-      setPinFlash("Skipped — won't surface again");
-      if (navigator.vibrate) navigator.vibrate(8);
-      // Jump to next chapter so the audio doesn't keep narrating it.
+      setTimeout(() => setPinFlash(null), 2000);
+      return;
+    }
+    setPinFlash("Skipped — won't surface again");
+    if (navigator.vibrate) navigator.vibrate(8);
+
+    // Auto-continue at the next chapter. If there isn't one — i.e. the
+    // user skipped the final paper — jump to the briefing's sign-off
+    // so audio doesn't keep narrating the just-dismissed paper.
+    const a = audioRef.current;
+    const next = paperBlocks[activeBlockIdx + 1];
+    if (next && typeof next.start_seconds === "number") {
       seekToBlock(activeBlockIdx + 1);
+    } else if (a) {
+      // No next chapter — skip to end of audio (sign-off if present).
+      const signOff = (briefing?.script_json as any)?.section_timings?.sign_off?.start;
+      if (typeof signOff === "number") {
+        seekTo(signOff);
+        if (a.paused) a.play();
+      } else {
+        // No sign-off timing either — just end gracefully.
+        seekTo(audioDuration || 0);
+        a.pause();
+      }
     }
     setTimeout(() => setPinFlash(null), 2000);
   }
