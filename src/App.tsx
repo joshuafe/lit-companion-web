@@ -15,6 +15,7 @@ import AdminUserDetailPage from "./pages/AdminUserDetailPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import ConstellationPage from "./pages/ConstellationPage";
 import AddPaperPage from "./pages/AddPaperPage";
+import LatestPage from "./pages/LatestPage";
 import SearchModal from "./components/SearchModal";
 
 export default function App() {
@@ -97,6 +98,7 @@ export default function App() {
           <Route path="/briefing" element={<BriefingPage />} />
           <Route path="/library" element={<PinnedPage />} />
           <Route path="/library/add" element={<AddPaperPage />} />
+          <Route path="/latest" element={<LatestPage />} />
           <Route path="/constellation" element={<ConstellationPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/seeds" element={<SeedsPage />} />
@@ -116,6 +118,7 @@ function TabBar() {
   const { pathname } = useLocation();
   const tabs = [
     { to: "/", label: "Feed", icon: "📰" },
+    { to: "/latest", label: "Latest", icon: "⏱" },
     { to: "/briefing", label: "Briefing", icon: "🎧" },
     { to: "/library", label: "Library", icon: "★" },
     { to: "/settings", label: "Settings", icon: "⚙︎" },

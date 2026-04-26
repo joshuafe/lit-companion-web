@@ -257,18 +257,19 @@ export default function FeedPage() {
       }
     }
 
-    // Freshness = when WE added it to the feed (created_at), not when
-    // the journal printed it. Academic papers cycle for weeks; the
-    // user's mental model is "what's new in MY feed since yesterday."
-    // Three buckets: today, last 3 days, older. Within each, by relevance.
+    // Freshness sort: per-day buckets so the LOWEST-relevance paper
+    // from today still outranks the HIGHEST-relevance paper from
+    // yesterday. The user's complaint: "I don't like 10d sitting at
+    // the top of a field." Bucket = days since we ingested (created_at,
+    // not published_at — academic publishing latency makes published
+    // date misleading). Within a bucket, order by relevance.
     const today = new Date(); today.setHours(0,0,0,0);
-    const todayCutoff = today.getTime();
-    const threeDayCutoff = todayCutoff - 3 * 24 * 60 * 60 * 1000;
-    const freshnessBucket = (p: Paper): number => {
+    const todayMs = today.getTime();
+    const DAY = 24 * 60 * 60 * 1000;
+    const daysOld = (p: Paper): number => {
       const t = p.created_at ? Date.parse(p.created_at) : 0;
-      if (t >= todayCutoff)    return 2; // added today
-      if (t >= threeDayCutoff) return 1; // last 3 days
-      return 0;
+      if (t >= todayMs) return 0;
+      return Math.floor((todayMs - t) / DAY) + 1;
     };
     // Preprint dedup: when the same user has both a preprint and its
     // peer-reviewed published version in the feed, hide the preprint.
@@ -288,9 +289,9 @@ export default function FeedPage() {
         return true;
       })
       .sort((a, b) => {
-        const ab = freshnessBucket(a);
-        const bb = freshnessBucket(b);
-        if (ab !== bb) return bb - ab;
+        const da = daysOld(a);
+        const db = daysOld(b);
+        if (da !== db) return da - db;
         return (b.relevance_score ?? 0) - (a.relevance_score ?? 0);
       })
       .slice(0, 20);
