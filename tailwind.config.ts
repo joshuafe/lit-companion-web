@@ -46,6 +46,17 @@ export default {
           "system-ui",
           "sans-serif",
         ],
+        // Serif used for body prose (tldrs, abstracts, transcripts) so the
+        // app reads as a research tool, not a chat UI. Charter ships with
+        // macOS/iOS; Source Serif 4 / Iowan / Georgia are graceful fallbacks.
+        serif: [
+          '"Charter"',
+          '"Iowan Old Style"',
+          '"Source Serif 4"',
+          '"Source Serif Pro"',
+          "Georgia",
+          "serif",
+        ],
       },
       fontSize: {
         eyebrow: ["11px", { lineHeight: "14px", letterSpacing: "0.04em" }],

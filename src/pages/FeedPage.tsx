@@ -468,7 +468,7 @@ export default function FeedPage() {
                 )}
 
                 {p.summary?.tldr && (
-                  <p className="mt-3 text-caption text-text-primary line-clamp-3">
+                  <p className="mt-3 font-serif text-[15px] leading-snug text-text-primary line-clamp-4">
                     {stripHtml(p.summary.tldr)}
                   </p>
                 )}

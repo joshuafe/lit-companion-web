@@ -4,7 +4,7 @@ import { supabase, SUPABASE_URL } from "../lib/supabase";
 
 interface Seed {
   id: string;
-  kind: "pmid" | "doi" | "title";
+  kind: "pmid" | "doi" | "title" | "author";
   value: string;
   created_at: string;
   processed_at: string | null;
@@ -13,7 +13,7 @@ interface Seed {
 export default function SeedsPage() {
   const [seeds, setSeeds] = useState<Seed[]>([]);
   const [loading, setLoading] = useState(true);
-  const [kind, setKind] = useState<"pmid" | "doi" | "title">("pmid");
+  const [kind, setKind] = useState<"pmid" | "doi" | "title" | "author">("pmid");
   const [value, setValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -159,15 +159,15 @@ export default function SeedsPage() {
       </section>
 
       <form onSubmit={addSeed} className="bg-bg-card rounded-2xl p-4 space-y-3">
-        <div className="flex gap-2">
-          {(["pmid", "doi", "title"] as const).map((k) => (
+        <div className="flex gap-2 flex-wrap">
+          {(["pmid", "doi", "title", "author"] as const).map((k) => (
             <button
               key={k}
               type="button"
               onClick={() => setKind(k)}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider ${
                 kind === k
-                  ? "bg-accent text-white"
+                  ? "bg-jewel-emerald text-white"
                   : "bg-bg-primary text-text-secondary"
               }`}
             >
@@ -184,10 +184,19 @@ export default function SeedsPage() {
               ? "e.g. 39123456"
               : kind === "doi"
               ? "e.g. 10.1182/bloodadvances.2024012345"
+              : kind === "author"
+              ? "e.g. Levine RL  — every new paper by them surfaces"
               : "e.g. immune reconstitution after HSCT"
           }
-          className="w-full rounded-xl bg-bg-primary px-4 py-3 text-base text-text-primary placeholder:text-text-secondary/60 border border-transparent focus:border-accent focus:outline-none"
+          className="w-full rounded-xl bg-bg-primary px-4 py-3 text-base text-text-primary placeholder:text-text-secondary/60 border border-transparent focus:border-jewel-emerald focus:outline-none"
         />
+        {kind === "author" && (
+          <p className="text-caption text-text-secondary">
+            Use PubMed format: <code className="bg-bg-primary px-1 rounded">LastName Initials</code>
+            {" "}— e.g. <code className="bg-bg-primary px-1 rounded">Hanash AM</code>,{" "}
+            <code className="bg-bg-primary px-1 rounded">DeWolf S</code>. We surface every new paper they author or co-author.
+          </p>
+        )}
         <button
           type="submit"
           disabled={submitting || !value.trim()}

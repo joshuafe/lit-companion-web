@@ -229,7 +229,7 @@ export default function BriefingPage() {
           <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
             TRANSCRIPT
           </div>
-          <pre className="mt-3 whitespace-pre-wrap text-[15px] leading-relaxed text-text-primary font-sans">
+          <pre className="mt-3 whitespace-pre-wrap font-serif text-[16px] leading-relaxed text-text-primary">
             {briefing.transcript}
           </pre>
         </section>

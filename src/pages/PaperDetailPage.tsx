@@ -137,7 +137,7 @@ export default function PaperDetailPage() {
       {s ? (
         <>
           <Section label="KEY CLAIM" body={s.key_claim} />
-          <div className="mt-4 bg-bg-card rounded-xl p-4 text-[14px] font-medium text-text-primary">
+          <div className="mt-4 bg-bg-card rounded-xl p-4 font-serif text-[16px] leading-relaxed text-text-primary">
             {s.tldr}
           </div>
 
