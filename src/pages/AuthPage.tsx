@@ -75,6 +75,23 @@ export default function AuthPage() {
     }
   }
 
+  function signInWithOrcid() {
+    // Hand-off to ORCID's authorize endpoint. Server-side callback handles
+    // token exchange + Supabase user creation + invite-redemption auto-grandfather.
+    const ORCID_BASE = "https://orcid.org";
+    const clientId = (import.meta as any).env?.VITE_ORCID_CLIENT_ID;
+    if (!clientId) {
+      setError("ORCID sign-in not configured (set VITE_ORCID_CLIENT_ID in Vercel env).");
+      return;
+    }
+    const url = new URL(`${ORCID_BASE}/oauth/authorize`);
+    url.searchParams.set("client_id", clientId);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", "/authenticate /read-limited");
+    url.searchParams.set("redirect_uri", `${SUPABASE_URL}/functions/v1/orcid-callback`);
+    window.location.href = url.toString();
+  }
+
   async function signInWithGoogle() {
     setError(null);
     if (!email || !code) {
@@ -221,6 +238,17 @@ export default function AuthPage() {
                 <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A8.99 8.99 0 0 0 9 0 8.99 8.99 0 0 0 .96 4.96l2.99 2.34C4.66 5.17 6.65 3.58 9 3.58z"/>
               </svg>
               Continue with Google
+            </button>
+
+            <button
+              type="button"
+              onClick={signInWithOrcid}
+              className="mt-3 w-full rounded-xl bg-jewel-emerald text-white font-semibold py-3 active:opacity-80 flex items-center justify-center gap-3 shadow-sm"
+            >
+              <svg width="18" height="18" viewBox="0 0 256 256" aria-hidden="true">
+                <path fill="#FFFFFF" d="M128 0C57.3 0 0 57.3 0 128s57.3 128 128 128 128-57.3 128-128S198.7 0 128 0zM86.3 186.2H70.9V79.1h15.4v107.1zm-7.7-118c-5.4 0-9.7-4.4-9.7-9.7s4.4-9.7 9.7-9.7 9.7 4.4 9.7 9.7-4.3 9.7-9.7 9.7zm107 78.2c0 22.4-13.4 39.7-37.5 39.7H114.7V79.1h33.4c24.1 0 37.5 16.7 37.5 39.7v28.6zm-15.4-26c0-15.9-9-25.2-23.9-25.2h-15.5v74.7h15.5c14.9 0 23.9-9.3 23.9-25.2v-24.3z"/>
+              </svg>
+              Continue with ORCID — auto-import your works
             </button>
 
           </>
