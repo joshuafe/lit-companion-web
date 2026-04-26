@@ -59,7 +59,7 @@ export default function SettingsPage() {
           <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
             Preferred journals
           </div>
-          <Link to="/settings/journals" className="text-accent text-sm font-medium">
+          <Link to="/settings/journals" className="text-jewel-emerald text-sm font-medium">
             Customize →
           </Link>
         </div>
@@ -69,6 +69,8 @@ export default function SettingsPage() {
             : "Pick a starting set."}
         </div>
       </section>
+
+      <ProxyTemplateCard />
 
       <section className="bg-bg-card rounded-2xl p-4">
         <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
@@ -82,5 +84,66 @@ export default function SettingsPage() {
         </p>
       </section>
     </div>
+  );
+}
+
+function ProxyTemplateCard() {
+  const [value, setValue] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("profiles").select("proxy_url_template").maybeSingle();
+      setValue((data as any)?.proxy_url_template ?? "");
+      setLoaded(true);
+    })();
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSaving(false); return; }
+    const v = value.trim() || null;
+    const { error } = await supabase
+      .from("profiles")
+      .update({ proxy_url_template: v })
+      .eq("user_id", user.id);
+    setSaving(false);
+    setStatus(error ? `Error: ${error.message}` : "Saved.");
+    setTimeout(() => setStatus(null), 2000);
+  }
+
+  if (!loaded) return null;
+  return (
+    <section className="bg-bg-card rounded-2xl p-4">
+      <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
+        Institutional proxy
+      </div>
+      <p className="mt-2 text-caption text-text-secondary">
+        Used by the "Open via my proxy" button on paywalled papers. Find your
+        proxy URL on your library website (search "EZproxy" + your institution
+        name). Use <code className="bg-bg-primary px-1 rounded">{`{url}`}</code> as
+        a placeholder for the article URL, or omit it to append.
+      </p>
+      <div className="flex gap-2 mt-3">
+        <input
+          type="url"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="https://login.proxy.library.weill.cornell.edu/login?url={url}"
+          className="flex-1 rounded-xl bg-bg-primary px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/60 border border-transparent focus:border-jewel-emerald focus:outline-none"
+        />
+        <button
+          onClick={save}
+          disabled={saving}
+          className="rounded-xl bg-jewel-emerald text-white text-sm font-semibold px-4 disabled:opacity-50"
+        >
+          {saving ? "…" : "Save"}
+        </button>
+      </div>
+      {status && <div className="mt-2 text-caption text-text-secondary">{status}</div>}
+    </section>
   );
 }
