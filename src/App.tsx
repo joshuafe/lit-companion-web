@@ -87,52 +87,106 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell bg-bg-primary">
-      <main className="pb-24">
-        <Routes>
-          <Route path="/welcome" element={<OnboardingPage />} />
-          <Route
-            path="/"
-            element={needsOnboarding ? <Navigate to="/welcome" replace /> : <FeedPage />}
-          />
-          <Route path="/paper/:id" element={<PaperDetailPage />} />
-          <Route path="/briefing" element={<BriefingPage />} />
-          <Route path="/library" element={<PinnedPage />} />
-          <Route path="/library/add" element={<AddPaperPage />} />
-          <Route path="/latest" element={<LatestPage />} />
-          <Route path="/toc" element={<TocPage />} />
-          <Route path="/constellation" element={<ConstellationPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/settings/seeds" element={<SeedsPage />} />
-          <Route path="/settings/journals" element={<JournalsPage />} />
-          <Route path="/admin" element={<AdminPage />} />
-          <Route path="/admin/:userId" element={<AdminUserDetailPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
-      <TabBar />
+    <div className="bg-bg-primary min-h-screen">
+      {/* Desktop layout = sticky left sidebar + wide main column.
+          Mobile layout = main column only, bottom TabBar reappears. */}
+      <div className="lg:flex lg:gap-0">
+        <DesktopSidebar onSearch={() => setSearchOpen(true)} />
+        <main className="flex-1 pb-24 lg:pb-12 lg:min-h-screen">
+          <Routes>
+            <Route path="/welcome" element={<OnboardingPage />} />
+            <Route
+              path="/"
+              element={needsOnboarding ? <Navigate to="/welcome" replace /> : <FeedPage />}
+            />
+            <Route path="/paper/:id" element={<PaperDetailPage />} />
+            <Route path="/briefing" element={<BriefingPage />} />
+            <Route path="/library" element={<PinnedPage />} />
+            <Route path="/library/add" element={<AddPaperPage />} />
+            <Route path="/latest" element={<LatestPage />} />
+            <Route path="/toc" element={<TocPage />} />
+            <Route path="/constellation" element={<ConstellationPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings/seeds" element={<SeedsPage />} />
+            <Route path="/settings/journals" element={<JournalsPage />} />
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/admin/:userId" element={<AdminUserDetailPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      </div>
+      <MobileTabBar />
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
     </div>
   );
 }
 
-function TabBar() {
+const NAV_ITEMS = [
+  { to: "/", label: "Feed", icon: "📰", match: (p: string) => p === "/" || p.startsWith("/paper") },
+  { to: "/latest", label: "Latest", icon: "⏱", match: (p: string) => p.startsWith("/latest") },
+  { to: "/toc", label: "Journal TOC", icon: "📑", match: (p: string) => p.startsWith("/toc"), desktopOnly: true },
+  { to: "/briefing", label: "Briefing", icon: "🎧", match: (p: string) => p.startsWith("/briefing") },
+  { to: "/library", label: "Library", icon: "★", match: (p: string) => p.startsWith("/library") },
+  { to: "/constellation", label: "Constellation", icon: "✦", match: (p: string) => p.startsWith("/constellation"), desktopOnly: true },
+  { to: "/settings", label: "Settings", icon: "⚙︎", match: (p: string) => p.startsWith("/settings") },
+];
+
+function DesktopSidebar({ onSearch }: { onSearch: () => void }) {
   const { pathname } = useLocation();
-  const tabs = [
-    { to: "/", label: "Feed", icon: "📰" },
-    { to: "/latest", label: "Latest", icon: "⏱" },
-    { to: "/briefing", label: "Briefing", icon: "🎧" },
-    { to: "/library", label: "Library", icon: "★" },
-    { to: "/settings", label: "Settings", icon: "⚙︎" },
-  ];
   return (
-    <nav className="tab-bar fixed bottom-0 inset-x-0 bg-bg-primary/95 backdrop-blur border-t border-stroke z-10">
+    <aside className="hidden lg:flex flex-col w-60 shrink-0 border-r border-stroke bg-bg-primary sticky top-0 h-screen px-4 py-6">
+      <Link to="/" className="flex items-center gap-2 mb-8 px-2">
+        <img src="/logo.svg" alt="" className="w-8 h-8 rounded-lg" />
+        <span className="font-serif font-semibold text-[17px] tracking-tight">
+          Lit Companion
+        </span>
+      </Link>
+      <button
+        onClick={onSearch}
+        className="flex items-center gap-2 px-3 py-2 mb-4 text-sm text-text-secondary bg-bg-card rounded-xl border border-stroke hover:border-jewel-emerald/40 transition"
+      >
+        <span>⌕</span>
+        <span className="flex-1 text-left">Search</span>
+        <kbd className="text-[10px] font-mono bg-bg-primary border border-stroke rounded px-1.5 py-0.5">⌘K</kbd>
+      </button>
+      <nav className="flex flex-col gap-0.5">
+        {NAV_ITEMS.map((t) => {
+          const active = t.match(pathname);
+          return (
+            <NavLink
+              key={t.to}
+              to={t.to}
+              className={`flex items-center gap-3 px-3 py-2 rounded-xl text-[14px] font-medium transition ${
+                active
+                  ? "bg-jewel-emerald/12 text-jewel-emerald"
+                  : "text-text-secondary hover:text-text-primary hover:bg-bg-card"
+              }`}
+            >
+              <span className="text-lg leading-none w-5 text-center">{t.icon}</span>
+              <span>{t.label}</span>
+            </NavLink>
+          );
+        })}
+      </nav>
+      <div className="mt-auto text-caption text-text-secondary/60 px-3">
+        <Link to="/admin" className="hover:text-text-secondary">Admin</Link>
+      </div>
+    </aside>
+  );
+}
+
+function Link({ to, children, className }: { to: string; children: React.ReactNode; className?: string }) {
+  return <NavLink to={to} className={className}>{children}</NavLink>;
+}
+
+function MobileTabBar() {
+  const { pathname } = useLocation();
+  const tabs = NAV_ITEMS.filter((t) => !t.desktopOnly);
+  return (
+    <nav className="tab-bar fixed bottom-0 inset-x-0 bg-bg-primary/95 backdrop-blur border-t border-stroke z-10 lg:hidden">
       <div className="max-w-lg mx-auto flex">
         {tabs.map((t) => {
-          const active =
-            t.to === "/"
-              ? pathname === "/" || pathname.startsWith("/paper")
-              : pathname.startsWith(t.to);
+          const active = t.match(pathname);
           return (
             <NavLink
               key={t.to}

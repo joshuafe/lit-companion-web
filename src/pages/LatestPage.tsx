@@ -108,7 +108,7 @@ export default function LatestPage() {
     .slice(0, 12);
 
   return (
-    <div className="max-w-lg mx-auto px-5 pt-10 pb-32">
+    <div className="max-w-lg lg:max-w-5xl mx-auto px-5 lg:px-8 pt-10 pb-32">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-[34px] font-semibold text-text-primary leading-tight">
@@ -187,7 +187,7 @@ export default function LatestPage() {
             <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider mb-2">
               {day} <span className="text-text-secondary/60 font-normal">· {dayPapers.length}</span>
             </div>
-            <ul className="space-y-2">
+            <ul className="space-y-2 lg:grid lg:grid-cols-2 lg:gap-2 lg:space-y-0">
               {dayPapers.map((p) => (
                 <li key={p.id}>
                   <Link

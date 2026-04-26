@@ -261,7 +261,7 @@ export default function PaperDetailPage() {
   const inst = paper.last_author_institution || paper.first_author_institution;
 
   return (
-    <div className="max-w-lg mx-auto px-5 pt-6 pb-32">
+    <div className="max-w-lg lg:max-w-3xl mx-auto px-5 lg:px-8 pt-6 pb-32">
       <Link to="/" className="text-jewel-emerald text-sm font-medium">‹ Feed</Link>
 
       <div className="mt-4 flex items-center gap-2">
@@ -460,8 +460,9 @@ export default function PaperDetailPage() {
         </div>
       </div>
 
-      {/* Sticky action bar */}
-      <div className="fixed bottom-16 inset-x-0 bg-bg-primary/95 backdrop-blur border-t border-stroke">
+      {/* Sticky action bar — bottom on mobile, hidden on desktop where
+          buttons live in the natural page flow. */}
+      <div className="fixed bottom-16 inset-x-0 bg-bg-primary/95 backdrop-blur border-t border-stroke lg:hidden">
         <div className="max-w-lg mx-auto flex gap-1 px-2 py-2">
           <button
             onClick={togglePin}

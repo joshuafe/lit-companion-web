@@ -375,7 +375,7 @@ export default function FeedPage() {
   }, [papers]);
 
   return (
-    <div className="max-w-lg mx-auto px-5 pt-10">
+    <div className="max-w-lg lg:max-w-5xl mx-auto px-5 lg:px-8 pt-10">
       <header className="mb-6">
         {newSinceLast > 0 && (
           <div className="mb-1">
@@ -593,7 +593,7 @@ export default function FeedPage() {
         </Link>
       )}
 
-      <ul className="space-y-3">
+      <ul className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
         {papers
           .map((p, idx) => ({ p, idx }))
           .filter(({ idx }) => {

@@ -221,7 +221,7 @@ export default function BriefingPage() {
   }
 
   return (
-    <div className="max-w-lg mx-auto px-6 pt-10 pb-32">
+    <div className="max-w-lg lg:max-w-3xl mx-auto px-6 lg:px-8 pt-10 pb-32">
       <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
         {briefing?.briefing_date || "Today's briefing"}
       </div>

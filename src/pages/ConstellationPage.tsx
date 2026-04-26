@@ -195,7 +195,7 @@ export default function ConstellationPage() {
   const maxCount = Math.max(1, ...nodes.map((n) => n.count));
 
   return (
-    <div className="max-w-lg mx-auto px-5 pt-10 pb-32">
+    <div className="max-w-lg lg:max-w-4xl mx-auto px-5 lg:px-8 pt-10 pb-32">
       <div className="flex items-center gap-3 mb-2">
         <Link to="/" className="text-jewel-emerald text-sm font-medium">‹ Feed</Link>
         <span className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">

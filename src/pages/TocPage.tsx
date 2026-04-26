@@ -185,7 +185,7 @@ export default function TocPage() {
   );
 
   return (
-    <div className="max-w-lg mx-auto px-5 pt-10 pb-32">
+    <div className="max-w-lg lg:max-w-5xl mx-auto px-5 lg:px-8 pt-10 pb-32">
       <div className="flex items-center gap-3 mb-2">
         <Link to="/latest" className="text-jewel-emerald text-sm font-medium">
           ‹ Latest
@@ -271,7 +271,7 @@ export default function TocPage() {
               {day}{" "}
               <span className="text-text-secondary/60 font-normal">· {items.length}</span>
             </div>
-            <ul className="space-y-2">
+            <ul className="space-y-2 lg:grid lg:grid-cols-2 lg:gap-2 lg:space-y-0">
               {items.map((item, i) => {
                 const key = itemKey(item);
                 const pinned = pinnedKeys.has(key);
