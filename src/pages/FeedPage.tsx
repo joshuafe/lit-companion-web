@@ -242,13 +242,25 @@ export default function FeedPage() {
       }
     }
 
-    const freshCutoff = Date.now() - 2 * 24 * 60 * 60 * 1000;
+    // Freshness = when WE added it to the feed (created_at), not when
+    // the journal printed it. Academic papers cycle for weeks; the
+    // user's mental model is "what's new in MY feed since yesterday."
+    // Three buckets: today, last 3 days, older. Within each, by relevance.
+    const today = new Date(); today.setHours(0,0,0,0);
+    const todayCutoff = today.getTime();
+    const threeDayCutoff = todayCutoff - 3 * 24 * 60 * 60 * 1000;
+    const freshnessBucket = (p: Paper): number => {
+      const t = p.created_at ? Date.parse(p.created_at) : 0;
+      if (t >= todayCutoff)    return 2; // added today
+      if (t >= threeDayCutoff) return 1; // last 3 days
+      return 0;
+    };
     const ranked = ((rows as Paper[]) || [])
       .filter((p) => !isJunk(p.title))
       .sort((a, b) => {
-        const aFresh = a.published_at && Date.parse(a.published_at) >= freshCutoff ? 1 : 0;
-        const bFresh = b.published_at && Date.parse(b.published_at) >= freshCutoff ? 1 : 0;
-        if (aFresh !== bFresh) return bFresh - aFresh;
+        const ab = freshnessBucket(a);
+        const bb = freshnessBucket(b);
+        if (ab !== bb) return bb - ab;
         return (b.relevance_score ?? 0) - (a.relevance_score ?? 0);
       })
       .slice(0, 20);
