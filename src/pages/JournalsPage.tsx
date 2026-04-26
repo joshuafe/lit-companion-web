@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import { ALL_KNOWN_JOURNALS, JOURNAL_SETS } from "../lib/journalSets";
+import { ALL_KNOWN_JOURNALS, sortSetsByInterest, scoreSetByInterest } from "../lib/journalSets";
 
 type JournalEntry = { name: string };
 
@@ -11,19 +11,27 @@ export default function JournalsPage() {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [customName, setCustomName] = useState("");
+  const [interestText, setInterestText] = useState<string>("");
 
   useEffect(() => {
     (async () => {
       const { data } = await supabase
         .from("profiles")
-        .select("suggested_journals")
+        .select("suggested_journals,interest_text")
         .maybeSingle();
       const raw = (data?.suggested_journals as JournalEntry[] | string[]) ?? [];
       const names = raw.map((x) => (typeof x === "string" ? x : x.name));
       setSelected(new Set(names));
+      setInterestText((data as any)?.interest_text || "");
       setLoading(false);
     })();
   }, []);
+
+  // Bundles sorted with interest-relevant ones at the top.
+  const sortedSets = useMemo(
+    () => sortSetsByInterest(interestText),
+    [interestText],
+  );
 
   function toggle(name: string) {
     setSelected((prev) => {
@@ -84,26 +92,43 @@ export default function JournalsPage() {
       <section>
         <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider mb-2">
           Starting sets
+          {interestText && (
+            <span className="ml-2 normal-case tracking-normal text-text-secondary/70 font-normal">
+              · sorted to your interests
+            </span>
+          )}
         </div>
         <div className="grid grid-cols-1 gap-2">
-          {JOURNAL_SETS.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => applyPreset(s.journals)}
-              className="bg-bg-card rounded-2xl p-3 text-left active:opacity-80"
-            >
-              <div className="text-sm font-semibold text-text-primary">
-                {s.name}
-              </div>
-              <div className="text-caption text-text-secondary mt-0.5">
-                {s.description}
-              </div>
-              <div className="text-caption text-text-secondary/70 mt-1">
-                {s.journals.slice(0, 4).join(" · ")}
-                {s.journals.length > 4 ? ` · +${s.journals.length - 4}` : ""}
-              </div>
-            </button>
-          ))}
+          {sortedSets.map((s) => {
+            const score = scoreSetByInterest(s, interestText);
+            return (
+              <button
+                key={s.id}
+                onClick={() => applyPreset(s.journals)}
+                className={`bg-bg-card rounded-2xl p-3 text-left active:opacity-80 border ${
+                  score > 0 ? "border-jewel-emerald/30" : "border-transparent"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="text-sm font-semibold text-text-primary">
+                    {s.name}
+                  </div>
+                  {score > 0 && (
+                    <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-jewel-emerald/15 text-jewel-emerald">
+                      ★ matches
+                    </span>
+                  )}
+                </div>
+                <div className="text-caption text-text-secondary mt-0.5">
+                  {s.description}
+                </div>
+                <div className="text-caption text-text-secondary/70 mt-1">
+                  {s.journals.slice(0, 4).join(" · ")}
+                  {s.journals.length > 4 ? ` · +${s.journals.length - 4}` : ""}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </section>
 

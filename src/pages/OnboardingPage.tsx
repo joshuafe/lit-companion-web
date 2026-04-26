@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase, SUPABASE_URL } from "../lib/supabase";
-import { JOURNAL_SETS } from "../lib/journalSets";
+import { JOURNAL_SETS, sortSetsByInterest } from "../lib/journalSets";
 
 type Step = "welcome" | "interest" | "journals" | "authors" | "done";
 
@@ -253,7 +253,7 @@ export default function OnboardingPage() {
             Pick the closest preset. You can fine-tune later in Settings.
           </p>
           <div className="space-y-2">
-            {JOURNAL_SETS.map((s) => {
+            {sortSetsByInterest(interestText).map((s) => {
               const active = presetId === s.id;
               return (
                 <button
