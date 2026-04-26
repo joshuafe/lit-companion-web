@@ -357,17 +357,20 @@ export default function OnboardingPage() {
 
       {step === "done" && (
         <div className="space-y-5 text-center pt-8">
-          <div className="text-6xl">🎧</div>
+          <div className="relative inline-block">
+            <div className="text-6xl">🛠️</div>
+            <span className="absolute -top-1 -right-2 inline-flex h-3 w-3 rounded-full bg-jewel-emerald animate-ping" />
+          </div>
           <h2 className="text-[32px] font-semibold leading-tight text-text-primary">
-            You're set.
+            Building your first feed
           </h2>
           <p className="font-serif text-[16px] leading-relaxed text-text-primary max-w-sm mx-auto">
-            The pipeline runs every weekday at 5:30 AM your time. Your first
-            briefing should land in your feed within 24 hours.
+            The pipeline is reading PubMed and ranking papers against your
+            interests. <span className="font-semibold">First feed in ~10–20 minutes.</span>
           </p>
           <p className="text-caption text-text-secondary max-w-xs mx-auto">
-            New papers ingest every 90 minutes during the day, so your feed
-            updates throughout — not just overnight.
+            After that, new papers ingest every 90 minutes and a fresh
+            audio briefing lands every weekday at 5:30 AM your time.
           </p>
           <div className="pt-4">
             <button

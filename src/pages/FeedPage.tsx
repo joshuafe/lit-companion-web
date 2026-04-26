@@ -165,6 +165,7 @@ export default function FeedPage() {
   const [whyPaper, setWhyPaper] = useState<Paper | null>(null);
   const [focusedIdx, setFocusedIdx] = useState<number>(-1);
   const [todayBriefing, setTodayBriefing] = useState<Briefing | null>(null);
+  const [profileSignedUpAt, setProfileSignedUpAt] = useState<string | null>(null);
   const longPressTimer = useRef<number | null>(null);
   const longPressed = useRef(false);
   const navigate = useNavigate();
@@ -235,6 +236,12 @@ export default function FeedPage() {
         .maybeSingle(),
     ]);
     setTodayBriefing((brief as Briefing | null) || null);
+
+    // Track when this user came through onboarding so we can show the
+    // "building your first feed" state for fresh sign-ups (vs. an
+    // established user whose feed went genuinely quiet).
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.created_at) setProfileSignedUpAt(user.created_at);
     setAuthorSeeds(((seedRows as { value: string }[]) || []).map((r) => r.value));
     if (err1) setError(err1.message);
     if (visit?.data && Array.isArray(visit.data) && visit.data.length > 0) {
@@ -294,6 +301,23 @@ export default function FeedPage() {
   }
 
   useEffect(() => { load(); }, []);
+
+  // Auto-poll while the feed is empty so a fresh user doesn't have to
+  // hard-refresh once the pipeline lands their first papers. Polls every
+  // 30s, only while the document is visible (no battery drain on a
+  // background tab), and stops the moment papers arrive.
+  useEffect(() => {
+    if (papers.length > 0) return;
+    if (loading) return;
+    let cancelled = false;
+    const interval = setInterval(() => {
+      if (cancelled) return;
+      if (document.visibilityState !== "visible") return;
+      load();
+    }, 30_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [papers.length, loading]);
 
   // Keyboard navigation: j/k = next/prev, Enter = open, p = pin/unpin,
   // ? = open the why-modal for the focused card. Disabled while a modal
@@ -390,29 +414,60 @@ export default function FeedPage() {
         </div>
       )}
 
-      {!loading && papers.length === 0 && (
-        <div className="text-center py-12 px-4">
-          <div className="text-4xl mb-3">📂</div>
-          <p className="text-text-primary font-medium mb-2">Your feed is quiet</p>
-          <p className="text-caption text-text-secondary mb-5 max-w-xs mx-auto">
-            The pipeline ranks new papers against your seeds. Add a few to bootstrap it — usually populates within an hour.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-2 justify-center max-w-xs mx-auto">
-            <Link
-              to="/settings/seeds"
-              className="px-4 py-2.5 rounded-xl bg-jewel-emerald text-white text-sm font-semibold active:opacity-80"
-            >
-              + Add seeds
-            </Link>
-            <Link
-              to="/settings/journals"
-              className="px-4 py-2.5 rounded-xl bg-bg-card text-text-primary text-sm font-semibold border border-stroke active:opacity-80"
-            >
-              Pick journals
-            </Link>
+      {!loading && papers.length === 0 && (() => {
+        // Fresh user (signed up < 24h ago and has no papers yet) gets the
+        // optimistic "building" state with an ETA. Older users get the
+        // genuine "your feed went quiet — add seeds" empty state.
+        const isFresh =
+          !!profileSignedUpAt &&
+          (Date.now() - new Date(profileSignedUpAt).getTime()) < 24 * 60 * 60 * 1000;
+        if (isFresh) {
+          return (
+            <div className="text-center py-12 px-4">
+              <div className="relative inline-block mb-3">
+                <div className="text-5xl">🛠️</div>
+                <span className="absolute top-0 right-0 inline-flex h-2.5 w-2.5 rounded-full bg-jewel-emerald animate-ping" />
+              </div>
+              <p className="text-text-primary font-semibold mb-2">Building your first feed</p>
+              <p className="text-caption text-text-secondary mb-2 max-w-xs mx-auto">
+                Embedding your interests and ranking the last 60 days of
+                PubMed against them.
+              </p>
+              <p className="text-caption text-text-secondary/70 max-w-xs mx-auto">
+                Usually 10–20 minutes. This page will refresh on its own —
+                no need to reload.
+              </p>
+              <div className="mt-5 inline-flex items-center gap-2 text-caption text-text-secondary/60">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-jewel-emerald animate-pulse" />
+                checking every 30s
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div className="text-center py-12 px-4">
+            <div className="text-4xl mb-3">📂</div>
+            <p className="text-text-primary font-medium mb-2">Your feed is quiet</p>
+            <p className="text-caption text-text-secondary mb-5 max-w-xs mx-auto">
+              The pipeline ranks new papers against your seeds. Add a few to bootstrap it — usually populates within an hour.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2 justify-center max-w-xs mx-auto">
+              <Link
+                to="/settings/seeds"
+                className="px-4 py-2.5 rounded-xl bg-jewel-emerald text-white text-sm font-semibold active:opacity-80"
+              >
+                + Add seeds
+              </Link>
+              <Link
+                to="/settings/journals"
+                className="px-4 py-2.5 rounded-xl bg-bg-card text-text-primary text-sm font-semibold border border-stroke active:opacity-80"
+              >
+                Pick journals
+              </Link>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* HERO — picks the freshest paper that has a real image, so the
           banner always carries a real figure (not the generated SVG fallback).
