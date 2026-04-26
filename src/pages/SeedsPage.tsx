@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { supabase } from "../lib/supabase";
+import { supabase, SUPABASE_URL } from "../lib/supabase";
 
 interface Seed {
   id: string;
@@ -17,6 +17,47 @@ export default function SeedsPage() {
   const [value, setValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [orcid, setOrcid] = useState("");
+  const [orcidImporting, setOrcidImporting] = useState(false);
+  const [orcidStatus, setOrcidStatus] = useState<string | null>(null);
+
+  async function importFromOrcid() {
+    setOrcidStatus(null);
+    setError(null);
+    if (!orcid.trim()) return;
+    setOrcidImporting(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      setError("Not signed in");
+      setOrcidImporting(false);
+      return;
+    }
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/seed-from-orcid`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ orcid }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setError(body.error || `Import failed (${res.status})`);
+      } else {
+        setOrcidStatus(
+          body.inserted > 0
+            ? `✓ Imported ${body.inserted} works from your ORCID profile.`
+            : body.message || "No new works to import.",
+        );
+        setOrcid("");
+        load();
+      }
+    } catch (e: any) {
+      setError(e.message);
+    }
+    setOrcidImporting(false);
+  }
 
   async function load() {
     setLoading(true);
@@ -83,6 +124,39 @@ export default function SeedsPage() {
         Papers that shape your taste. Add PMIDs, DOIs, or topic phrases — your
         Mac will re-embed within a few minutes.
       </p>
+
+      {/* Import from profile */}
+      <section className="bg-bg-card rounded-2xl p-4 space-y-3">
+        <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
+          Import from your profile
+        </div>
+        <p className="text-caption text-text-secondary">
+          Pull your published works directly. Fastest way to seed.
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={orcid}
+            onChange={(e) => setOrcid(e.target.value)}
+            placeholder="ORCID iD (0000-0000-0000-0000)"
+            className="flex-1 rounded-xl bg-bg-primary px-3 py-2.5 text-sm text-text-primary placeholder:text-text-secondary/60 border border-transparent focus:border-accent focus:outline-none font-mono"
+          />
+          <button
+            onClick={importFromOrcid}
+            disabled={orcidImporting || !orcid.trim()}
+            className="px-4 rounded-xl bg-accent text-white text-sm font-semibold disabled:opacity-50 active:opacity-80"
+          >
+            {orcidImporting ? "Importing…" : "Import"}
+          </button>
+        </div>
+        {orcidStatus && (
+          <div className="text-caption text-jewel-emerald">{orcidStatus}</div>
+        )}
+        <div className="text-caption text-text-secondary/70 pt-1">
+          Google Scholar import — coming soon. (No public API; we'll wire
+          this through a server-side scraper next week.)
+        </div>
+      </section>
 
       <form onSubmit={addSeed} className="bg-bg-card rounded-2xl p-4 space-y-3">
         <div className="flex gap-2">
