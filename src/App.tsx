@@ -14,6 +14,7 @@ import AdminPage from "./pages/AdminPage";
 import AdminUserDetailPage from "./pages/AdminUserDetailPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import ConstellationPage from "./pages/ConstellationPage";
+import AddPaperPage from "./pages/AddPaperPage";
 import SearchModal from "./components/SearchModal";
 
 export default function App() {
@@ -95,6 +96,7 @@ export default function App() {
           <Route path="/paper/:id" element={<PaperDetailPage />} />
           <Route path="/briefing" element={<BriefingPage />} />
           <Route path="/library" element={<PinnedPage />} />
+          <Route path="/library/add" element={<AddPaperPage />} />
           <Route path="/constellation" element={<ConstellationPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/seeds" element={<SeedsPage />} />

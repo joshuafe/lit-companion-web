@@ -172,10 +172,21 @@ export default function PinnedPage() {
 
   return (
     <div className="max-w-lg mx-auto px-5 pt-10 pb-32">
-      <h1 className="text-[34px] font-semibold text-text-primary leading-tight">Library</h1>
-      <p className="text-caption text-text-secondary mt-1">
-        Saved papers from the feed and audio briefings.
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-[34px] font-semibold text-text-primary leading-tight">Library</h1>
+          <p className="text-caption text-text-secondary mt-1">
+            Saved papers from the feed and audio briefings.
+          </p>
+        </div>
+        <Link
+          to="/library/add"
+          className="shrink-0 mt-2 px-4 py-2 rounded-full bg-jewel-emerald text-white text-sm font-semibold active:opacity-80"
+          title="Upload a PDF you found elsewhere"
+        >
+          + Add
+        </Link>
+      </div>
 
       {/* Tabs + export */}
       <div className="mt-5 flex items-center justify-between gap-3 flex-wrap">
