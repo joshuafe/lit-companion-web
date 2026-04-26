@@ -233,10 +233,10 @@ export default function AdminPage() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
-                Mac pipeline footprint · last 24h
+                Ollama footprint · last 24h
               </div>
               <div className="text-caption text-text-secondary/70 mt-0.5">
-                CPU + memory used by Literature Companion processes only — Ollama excluded.
+                CPU + memory consumed by Ollama on the Mac — when it's loaded, how hard, how often.
               </div>
             </div>
             <MetricsCurrent metrics={metrics} />
