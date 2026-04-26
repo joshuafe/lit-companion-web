@@ -166,7 +166,7 @@ export default function BriefingPage() {
           <div className="absolute inset-5 rounded-full bg-bg-card border border-stroke" />
           <button
             onClick={togglePlay}
-            className="relative z-10 w-20 h-20 rounded-full bg-accent text-white text-2xl flex items-center justify-center active:opacity-80"
+            className="relative z-10 w-20 h-20 rounded-full bg-jewel-emerald text-white text-2xl flex items-center justify-center active:opacity-80 shadow-lg shadow-jewel-emerald/25"
             aria-label={playing ? "Pause" : "Play"}
           >
             {playing ? "❚❚" : "▶"}
@@ -204,7 +204,7 @@ export default function BriefingPage() {
               <button
                 onClick={pinActive}
                 disabled={!activePaper}
-                className="shrink-0 rounded-full bg-accent text-white font-semibold px-4 py-2 text-sm disabled:opacity-40"
+                className="shrink-0 rounded-full bg-jewel-topaz text-white font-semibold px-4 py-2 text-sm disabled:opacity-40 shadow-sm"
                 aria-label="Pin currently-playing paper"
               >
                 ★ Pin

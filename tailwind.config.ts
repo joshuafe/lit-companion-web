@@ -15,20 +15,25 @@ export default {
           secondary: "#7D7266",
         },
         accent: "#B86E4C",      // muted terracotta
-        // Jewel-tone accents — used very sparingly: streak chip (emerald),
-        // 'new since' badge (sapphire), pin-burst glint (topaz). Each is
-        // desaturated to fit the warm-cream base.
+        // Jewel tones with topaz + emerald promoted to lead roles:
+        // - emerald: tier-1 marks, "verified" / saved-state, primary trust
+        // - topaz:   stars (★), pin-active glint, headline-tier accent
+        // - sapphire: "new since" badges, secondary trust
+        // - amethyst: wildcards, surprise picks
+        // - ruby: alerts / errors only
         jewel: {
-          emerald: "#3F6E55",
+          emerald: "#3F7A5C",   // slightly more saturated, used widely
+          "emerald-soft": "#E8F0EA",
           sapphire: "#3B557F",
           amethyst: "#6B4D78",
-          topaz: "#A8853A",
+          topaz: "#B89039",     // slightly more golden, used widely
+          "topaz-soft": "#F5ECD3",
           ruby: "#8C3F4C",
         },
         relevance: {
-          high: "#5C7A55",
-          mid: "#998F7F",
-          low: "#C7BDAE",
+          high: "#3F7A5C",      // emerald — strong match
+          mid:  "#B89039",      // topaz — worth a look
+          low:  "#C7BDAE",      // taupe — discovery / muted
         },
         warn: { bg: "#F4E8CD" },
         stroke: "#E8DFCB",
