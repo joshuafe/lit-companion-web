@@ -276,6 +276,9 @@ export default function PaperDetailPage() {
         {inst && <span className="text-text-secondary/80"> · {inst}</span>}
       </div>
 
+      <PreprintLink paper={paper} />
+
+
       {/* Follow first / last author chips. Senior author (last) is usually
           the PI — most useful target for "follow this lab". First-author also
           surfaced because trainees are mobile and worth tracking. */}
@@ -480,6 +483,63 @@ export default function PaperDetailPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// Cross-link banner: shown when this paper is the preprint of a now-
+// published article OR the published version of an earlier preprint.
+// Resolves the linked DOI to a paper row in the user's own table when
+// possible (so the link goes to /paper/<id>); falls back to doi.org.
+function PreprintLink({ paper }: { paper: Paper }) {
+  const [linkedTitle, setLinkedTitle] = useState<string | null>(null);
+  const [linkedJournal, setLinkedJournal] = useState<string | null>(null);
+  const [linkedId, setLinkedId] = useState<string | null>(null);
+
+  const isPreprint = !!paper.published_doi;
+  const otherDoi = paper.published_doi || paper.preprint_doi;
+
+  useEffect(() => {
+    if (!otherDoi) return;
+    (async () => {
+      const { data } = await supabase
+        .from("papers")
+        .select("id,title,journal")
+        .eq("doi", otherDoi)
+        .limit(1)
+        .maybeSingle();
+      if (data) {
+        setLinkedId((data as any).id);
+        setLinkedTitle((data as any).title);
+        setLinkedJournal((data as any).journal);
+      }
+    })();
+  }, [otherDoi]);
+
+  if (!otherDoi) return null;
+
+  const label = isPreprint
+    ? linkedJournal
+      ? `✓ Now published in ${linkedJournal}`
+      : "✓ Now peer-reviewed and published"
+    : "○ Originally posted as a preprint";
+  const tone = isPreprint ? "bg-jewel-emerald/10 text-jewel-emerald border-jewel-emerald/20" : "bg-jewel-topaz/10 text-jewel-topaz border-jewel-topaz/20";
+  const href = linkedId ? `/paper/${linkedId}` : `https://doi.org/${otherDoi}`;
+  const internal = !!linkedId;
+
+  const inner = (
+    <div className={`mt-3 rounded-xl border px-3 py-2 text-caption ${tone}`}>
+      <div className="font-semibold">{label}</div>
+      {linkedTitle && (
+        <div className="text-text-primary mt-0.5 line-clamp-2 font-serif text-[13px]">
+          {linkedTitle}
+        </div>
+      )}
+    </div>
+  );
+  return internal ? (
+    <Link to={href}>{inner}</Link>
+  ) : (
+    <a href={href} target="_blank" rel="noreferrer">{inner}</a>
   );
 }
 

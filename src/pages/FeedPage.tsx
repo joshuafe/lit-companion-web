@@ -263,8 +263,23 @@ export default function FeedPage() {
       if (t >= threeDayCutoff) return 1; // last 3 days
       return 0;
     };
+    // Preprint dedup: when the same user has both a preprint and its
+    // peer-reviewed published version in the feed, hide the preprint.
+    // Match on either DOI direction (papers store the OTHER side's DOI
+    // in published_doi for preprints, preprint_doi for published).
+    const allDois = new Set(
+      ((rows as Paper[]) || [])
+        .map((p) => p.doi)
+        .filter((d): d is string => !!d),
+    );
     const ranked = ((rows as Paper[]) || [])
       .filter((p) => !isJunk(p.title))
+      .filter((p) => {
+        // If this paper is a preprint and its published_doi exists in
+        // the feed, hide the preprint.
+        if (p.published_doi && allDois.has(p.published_doi)) return false;
+        return true;
+      })
       .sort((a, b) => {
         const ab = freshnessBucket(a);
         const bb = freshnessBucket(b);

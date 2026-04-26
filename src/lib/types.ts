@@ -41,6 +41,11 @@ export interface Paper {
   last_author_institution: string | null;
   hero_image_url: string | null;
   created_at: string | null;
+  // Preprint↔published linkage (populated from Crossref relations).
+  // Both DOIs reference the OTHER side: e.g. on a Nature paper, only
+  // preprint_doi is set; on its bioRxiv twin, only published_doi is set.
+  preprint_doi: string | null;
+  published_doi: string | null;
 }
 
 export interface Briefing {
