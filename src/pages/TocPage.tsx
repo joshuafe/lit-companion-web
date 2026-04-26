@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase, SUPABASE_URL } from "../lib/supabase";
+import SwipeRow from "../components/SwipeRow";
 
 interface TocItem {
   title: string;
@@ -276,13 +277,16 @@ export default function TocPage() {
                 const pinned = pinnedKeys.has(key);
                 return (
                   <li key={`${day}-${i}`}>
-                    <div className="bg-bg-card rounded-card p-3 flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
-                        <a
-                          href={item.link || "#"}
-                          target="_blank" rel="noreferrer"
-                          className="block active:opacity-80"
-                        >
+                    <SwipeRow
+                      onTap={() => item.link && window.open(item.link, "_blank", "noopener,noreferrer")}
+                      swipeRight={
+                        pinned
+                          ? undefined
+                          : { label: "★ Pin", bg: "bg-jewel-topaz", onCommit: () => pinItem(item) }
+                      }
+                    >
+                      <div className="bg-bg-card p-3 flex items-start gap-3 cursor-pointer select-none">
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-baseline justify-between gap-2 mb-1">
                             <span className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider line-clamp-1">
                               {item.journal}
@@ -300,21 +304,21 @@ export default function TocPage() {
                               {item.authors.length > 4 ? ", et al." : ""}
                             </div>
                           )}
-                        </a>
+                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); pinItem(item); }}
+                          disabled={pinned || pinningId === key}
+                          className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
+                            pinned
+                              ? "bg-jewel-emerald/15 text-jewel-emerald cursor-default"
+                              : "bg-jewel-topaz text-white active:opacity-80 disabled:opacity-50"
+                          }`}
+                          aria-label={pinned ? "Already pinned" : "Pin to library"}
+                        >
+                          {pinned ? "✓" : pinningId === key ? "…" : "★"}
+                        </button>
                       </div>
-                      <button
-                        onClick={() => pinItem(item)}
-                        disabled={pinned || pinningId === key}
-                        className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
-                          pinned
-                            ? "bg-jewel-emerald/15 text-jewel-emerald cursor-default"
-                            : "bg-jewel-topaz text-white active:opacity-80 disabled:opacity-50"
-                        }`}
-                        aria-label={pinned ? "Already pinned" : "Pin to library"}
-                      >
-                        {pinned ? "✓" : pinningId === key ? "…" : "★"}
-                      </button>
-                    </div>
+                    </SwipeRow>
                   </li>
                 );
               })}

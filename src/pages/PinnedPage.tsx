@@ -1,9 +1,89 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import type { Paper } from "../lib/types";
+import SwipeRow from "../components/SwipeRow";
 
 // BibTeX cite-key from first-author last name + year + first significant word.
+// Build display groups based on the user's chosen axis.
+// - "date": one group per relative day (today / yesterday / 3d ago / etc.)
+// - "tag":  one group per tag from summary.tags_suggested. Papers with
+//          multiple tags appear in each tag's group; untagged papers
+//          land in "Untagged".
+// - "journal": one group per paper.journal.
+function groupRows(
+  rows: (PinRow | DismissalRow)[],
+  groupBy: "date" | "tag" | "journal",
+  tab: "pinned" | "dismissed",
+): { heading: string; rows: (PinRow | DismissalRow)[] }[] {
+  if (rows.length === 0) return [];
+  const tsOf = (r: PinRow | DismissalRow) =>
+    tab === "pinned" ? (r as PinRow).pinned_at : (r as DismissalRow).dismissed_at;
+
+  if (groupBy === "date") {
+    // rows are already sorted desc by ts; bucket by day label.
+    const out: { heading: string; rows: (PinRow | DismissalRow)[] }[] = [];
+    let current: string | null = null;
+    for (const r of rows) {
+      const t = tsOf(r);
+      if (!t) continue;
+      const label = relativeDayLabel(t);
+      if (label !== current) {
+        current = label;
+        out.push({ heading: label, rows: [] });
+      }
+      out[out.length - 1].rows.push(r);
+    }
+    return out;
+  }
+
+  if (groupBy === "journal") {
+    const m = new Map<string, (PinRow | DismissalRow)[]>();
+    for (const r of rows) {
+      const j = r.papers?.journal || "Unknown journal";
+      if (!m.has(j)) m.set(j, []);
+      m.get(j)!.push(r);
+    }
+    return Array.from(m.entries())
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([heading, rs]) => ({ heading, rows: rs }));
+  }
+
+  // tag
+  const m = new Map<string, (PinRow | DismissalRow)[]>();
+  const untagged: (PinRow | DismissalRow)[] = [];
+  for (const r of rows) {
+    const tags = (r.papers?.summary?.tags_suggested || []).filter(Boolean);
+    if (tags.length === 0) {
+      untagged.push(r);
+      continue;
+    }
+    for (const t of tags) {
+      const key = t.toLowerCase();
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(r);
+    }
+  }
+  const groups = Array.from(m.entries())
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([heading, rs]) => ({ heading, rows: rs }));
+  if (untagged.length > 0) groups.push({ heading: "Untagged", rows: untagged });
+  return groups;
+}
+
+function relativeDayLabel(iso: string): string {
+  const d = new Date(iso); d.setHours(0, 0, 0, 0);
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const days = Math.round((t.getTime() - d.getTime()) / 86_400_000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days} days ago`;
+  if (days < 14) return "Last week";
+  if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
+  if (days < 365) return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  return d.toLocaleDateString("en-US", { year: "numeric" });
+}
+
 function bibKey(p: Paper): string {
   const first = (p.authors?.[0] || "anon").split(/[\s,]+/)[0].toLowerCase();
   const year = p.published_at ? new Date(p.published_at).getFullYear() : "nd";
@@ -91,6 +171,8 @@ export default function PinnedPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  const [groupBy, setGroupBy] = useState<"date" | "tag" | "journal">("date");
+  const navigate = useNavigate();
 
   async function load() {
     setLoading(true);
@@ -235,66 +317,84 @@ export default function PinnedPage() {
         </div>
       )}
 
-      <ul className="mt-5 space-y-3">
-        {showRows.map((r) => {
-          const p = r.papers;
-          if (!p) return null;
-          const when = tab === "pinned"
-            ? (r as PinRow).pinned_at
-            : (r as DismissalRow).dismissed_at;
-          const note = tab === "pinned" ? (r as PinRow).note : null;
-          return (
-            <li key={p.id}>
-              <div className="bg-bg-card rounded-card p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <span className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider line-clamp-1">
-                    {p.journal || "Unknown journal"}
-                    <span className="ml-2 normal-case tracking-normal text-text-secondary/70">
-                      · {tab === "pinned" ? "saved" : "dismissed"} {fmtDate(when)}
-                    </span>
-                  </span>
-                </div>
-                <Link
-                  to={`/paper/${p.id}`}
-                  className="block mt-2 text-[16px] font-semibold leading-snug text-text-primary line-clamp-3 active:opacity-70"
-                >
-                  {stripHtml(p.title)}
-                </Link>
-                {note && (
-                  <div className="mt-2 text-caption text-jewel-emerald italic">
-                    "{note}"
-                  </div>
-                )}
-                {p.summary?.tldr && (
-                  <p className="mt-2 text-caption text-text-secondary line-clamp-2">
-                    {stripHtml(p.summary.tldr)}
-                  </p>
-                )}
-                <div className="mt-3 flex items-center justify-between text-caption text-text-secondary">
-                  <span className="truncate">
-                    {p.authors?.[p.authors.length - 1] ?? p.authors?.[0] ?? ""}
-                  </span>
-                  {tab === "pinned" ? (
-                    <button
-                      onClick={() => unpin(p.id)}
-                      className="text-text-secondary hover:text-red-600 text-xs font-medium shrink-0"
+      {/* Group-by toggle */}
+      {!empty && (
+        <div className="mt-4 flex items-center gap-1.5 text-[11px] font-semibold">
+          <span className="text-text-secondary uppercase tracking-wider mr-1">Group:</span>
+          {(["date", "tag", "journal"] as const).map((g) => (
+            <button
+              key={g}
+              onClick={() => setGroupBy(g)}
+              className={`px-2.5 py-1 rounded-full transition ${
+                groupBy === g
+                  ? "bg-jewel-emerald/15 text-jewel-emerald"
+                  : "bg-bg-card text-text-secondary border border-stroke"
+              }`}
+            >
+              {g === "date" ? "Date" : g === "tag" ? "Tag" : "Journal"}
+            </button>
+          ))}
+          <span className="ml-auto text-text-secondary/60 font-normal text-[10px]">
+            Swipe left to remove
+          </span>
+        </div>
+      )}
+
+      <div className="mt-5 space-y-6">
+        {groupRows(showRows, groupBy, tab).map(({ heading, rows }) => (
+          <section key={heading}>
+            <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider mb-2">
+              {heading}{" "}
+              <span className="text-text-secondary/60 font-normal">· {rows.length}</span>
+            </div>
+            <ul className="space-y-2">
+              {rows.map((r) => {
+                const p = r.papers!;
+                const when = tab === "pinned"
+                  ? (r as PinRow).pinned_at
+                  : (r as DismissalRow).dismissed_at;
+                const note = tab === "pinned" ? (r as PinRow).note : null;
+                return (
+                  <li key={`${heading}-${p.id}`}>
+                    <SwipeRow
+                      onTap={() => navigate(`/paper/${p.id}`)}
+                      swipeLeft={
+                        tab === "pinned"
+                          ? { label: "Remove", bg: "bg-red-500", onCommit: () => unpin(p.id) }
+                          : { label: "↩ Restore", bg: "bg-jewel-emerald", onCommit: () => undoDismiss(p.id) }
+                      }
                     >
-                      Remove
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => undoDismiss(p.id)}
-                      className="text-jewel-emerald font-medium text-xs shrink-0"
-                    >
-                      ↩ Restore
-                    </button>
-                  )}
-                </div>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+                      <div className="bg-bg-card p-3 cursor-pointer select-none">
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider line-clamp-1">
+                            {p.journal || "Unknown journal"}
+                            <span className="ml-2 normal-case tracking-normal text-text-secondary/70">
+                              · {tab === "pinned" ? "saved" : "dismissed"} {fmtDate(when)}
+                            </span>
+                          </span>
+                        </div>
+                        <div className="mt-1.5 font-serif text-[15px] font-semibold leading-snug text-text-primary line-clamp-2">
+                          {stripHtml(p.title)}
+                        </div>
+                        {note && (
+                          <div className="mt-1 text-caption text-jewel-emerald italic line-clamp-1">
+                            "{note}"
+                          </div>
+                        )}
+                        {p.summary?.tldr && (
+                          <p className="mt-1 text-caption text-text-secondary line-clamp-2">
+                            {stripHtml(p.summary.tldr)}
+                          </p>
+                        )}
+                      </div>
+                    </SwipeRow>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))}
+      </div>
 
       {flash && (
         <div className="fixed bottom-24 inset-x-0 flex justify-center px-4 z-20 pointer-events-none">
