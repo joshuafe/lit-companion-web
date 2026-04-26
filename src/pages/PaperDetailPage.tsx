@@ -13,6 +13,10 @@ export default function PaperDetailPage() {
   const [flash, setFlash] = useState<string | null>(null);
   const [oaLoading, setOaLoading] = useState(false);
   const [followedAuthors, setFollowedAuthors] = useState<Set<string>>(new Set());
+  const [pinNote, setPinNote] = useState<string>("");
+  const [pinTags, setPinTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
+  const [savingPinMeta, setSavingPinMeta] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
 
@@ -59,10 +63,13 @@ export default function PaperDetailPage() {
       setPaper(data as Paper);
       const { data: pins } = await supabase
         .from("pins")
-        .select("paper_id")
+        .select("paper_id, note, tags")
         .eq("paper_id", id)
         .limit(1);
-      setPinned((pins?.length ?? 0) > 0);
+      const existingPin = (pins as any[])?.[0];
+      setPinned(!!existingPin);
+      setPinNote(existingPin?.note || "");
+      setPinTags(existingPin?.tags || []);
       const { data: profile } = await supabase
         .from("profiles")
         .select("proxy_url_template")
@@ -118,6 +125,46 @@ export default function PaperDetailPage() {
       if (navigator.vibrate) navigator.vibrate([18, 30, 12]);
     }
     setTimeout(() => setFlash(null), 1800);
+  }
+
+  // Persist note + tags. Debounced so typing doesn't write on every
+  // keystroke. Auto-pins the paper if it isn't already pinned — a user
+  // adding a note clearly wants the paper in their library.
+  async function savePinMeta(note: string, tags: string[]) {
+    if (!paper) return;
+    const u = (await supabase.auth.getUser()).data.user;
+    if (!u) return;
+    setSavingPinMeta(true);
+    const { error: err } = await supabase.from("pins").upsert(
+      { user_id: u.id, paper_id: paper.id, note: note.trim() || null, tags },
+      { onConflict: "user_id,paper_id" },
+    );
+    setSavingPinMeta(false);
+    if (err) {
+      setFlash(`Save failed: ${err.message}`);
+      setTimeout(() => setFlash(null), 2200);
+    } else if (!pinned) {
+      setPinned(true);
+    }
+  }
+
+  // Debounce — write 800 ms after the last edit.
+  useEffect(() => {
+    if (!paper) return;
+    if (!pinned && !pinNote && pinTags.length === 0) return;
+    const handle = setTimeout(() => savePinMeta(pinNote, pinTags), 800);
+    return () => clearTimeout(handle);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pinNote, pinTags, paper?.id]);
+
+  function addTag(t: string) {
+    const v = t.trim().toLowerCase();
+    if (!v || pinTags.includes(v)) return;
+    setPinTags([...pinTags, v]);
+    setTagInput("");
+  }
+  function removeTag(t: string) {
+    setPinTags(pinTags.filter((x) => x !== t));
   }
 
   async function dismiss() {
@@ -456,6 +503,62 @@ export default function PaperDetailPage() {
               if (f) uploadPdf(f);
               e.target.value = "";
             }}
+          />
+        </div>
+      </div>
+
+      {/* Notes + custom tags — visible always; saving auto-pins. */}
+      <div className="mt-6 border-t border-stroke pt-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
+            Your notes & tags
+          </div>
+          {savingPinMeta && (
+            <span className="text-[10px] text-text-secondary/60">saving…</span>
+          )}
+        </div>
+        <textarea
+          value={pinNote}
+          onChange={(e) => setPinNote(e.target.value)}
+          placeholder="What jumped out? Why does this matter to your work? Anything you want to remember…"
+          rows={4}
+          className="w-full rounded-xl bg-bg-card px-3 py-2.5 text-sm text-text-primary placeholder:text-text-secondary/50 border border-transparent focus:border-jewel-emerald focus:outline-none resize-none font-serif leading-relaxed"
+        />
+        <div className="mt-3">
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {pinTags.map((t) => (
+              <span
+                key={t}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full bg-jewel-emerald/15 text-jewel-emerald"
+              >
+                {t}
+                <button
+                  onClick={() => removeTag(t)}
+                  className="text-jewel-emerald/70 hover:text-jewel-emerald text-[14px] leading-none"
+                  aria-label={`Remove tag ${t}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {pinTags.length === 0 && (
+              <span className="text-caption text-text-secondary/60">
+                Tag this paper — e.g. <em>to read</em>, <em>lab discussion</em>, <em>grant prep</em>
+              </span>
+            )}
+          </div>
+          <input
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === ",") {
+                e.preventDefault();
+                addTag(tagInput);
+              }
+            }}
+            onBlur={() => tagInput.trim() && addTag(tagInput)}
+            placeholder="Add a tag, hit Enter…"
+            className="w-full rounded-xl bg-bg-card px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/50 border border-transparent focus:border-jewel-emerald focus:outline-none"
           />
         </div>
       </div>

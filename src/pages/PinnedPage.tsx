@@ -49,24 +49,38 @@ function groupRows(
       .map(([heading, rs]) => ({ heading, rows: rs }));
   }
 
-  // tag
-  const m = new Map<string, (PinRow | DismissalRow)[]>();
+  // tag — pull from BOTH user-authored pin tags (lowercased) and the
+  // LLM-suggested topical tags on the paper. User tags float to the top
+  // because they reflect explicit intent ("to read", "grant prep") that
+  // the topical tags don't.
+  const userTagBuckets = new Map<string, (PinRow | DismissalRow)[]>();
+  const aiTagBuckets = new Map<string, (PinRow | DismissalRow)[]>();
   const untagged: (PinRow | DismissalRow)[] = [];
   for (const r of rows) {
-    const tags = (r.papers?.summary?.tags_suggested || []).filter(Boolean);
-    if (tags.length === 0) {
+    const userTags = ((r as PinRow).tags || []).filter(Boolean);
+    const aiTags = (r.papers?.summary?.tags_suggested || []).filter(Boolean);
+    if (userTags.length === 0 && aiTags.length === 0) {
       untagged.push(r);
       continue;
     }
-    for (const t of tags) {
+    for (const t of userTags) {
       const key = t.toLowerCase();
-      if (!m.has(key)) m.set(key, []);
-      m.get(key)!.push(r);
+      if (!userTagBuckets.has(key)) userTagBuckets.set(key, []);
+      userTagBuckets.get(key)!.push(r);
+    }
+    for (const t of aiTags) {
+      const key = t.toLowerCase();
+      if (!aiTagBuckets.has(key)) aiTagBuckets.set(key, []);
+      aiTagBuckets.get(key)!.push(r);
     }
   }
-  const groups = Array.from(m.entries())
+  const userGroups = Array.from(userTagBuckets.entries())
     .sort((a, b) => b[1].length - a[1].length)
-    .map(([heading, rs]) => ({ heading, rows: rs }));
+    .map(([t, rs]) => ({ heading: `# ${t}`, rows: rs }));
+  const aiGroups = Array.from(aiTagBuckets.entries())
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([t, rs]) => ({ heading: t, rows: rs }));
+  const groups = [...userGroups, ...aiGroups];
   if (untagged.length > 0) groups.push({ heading: "Untagged", rows: untagged });
   return groups;
 }
@@ -139,6 +153,7 @@ interface PinRow {
   paper_id: string;
   pinned_at: string;
   note: string | null;
+  tags: string[] | null;
   papers: Paper | null;
 }
 
@@ -180,7 +195,7 @@ export default function PinnedPage() {
     const [{ data: pinData, error: pinErr }, { data: disData, error: disErr }] = await Promise.all([
       supabase
         .from("pins")
-        .select("paper_id, pinned_at, note, papers(*)")
+        .select("paper_id, pinned_at, note, tags, papers(*)")
         .order("pinned_at", { ascending: false }),
       supabase
         .from("dismissals")
@@ -377,11 +392,23 @@ export default function PinnedPage() {
                           {stripHtml(p.title)}
                         </div>
                         {note && (
-                          <div className="mt-1 text-caption text-jewel-emerald italic line-clamp-1">
-                            "{note}"
+                          <div className="mt-1 text-caption text-jewel-emerald italic line-clamp-2 font-serif">
+                            {note}
                           </div>
                         )}
-                        {p.summary?.tldr && (
+                        {tab === "pinned" && (r as PinRow).tags && (r as PinRow).tags!.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {(r as PinRow).tags!.slice(0, 4).map((t) => (
+                              <span
+                                key={t}
+                                className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-jewel-emerald/15 text-jewel-emerald"
+                              >
+                                #{t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {p.summary?.tldr && !note && (
                           <p className="mt-1 text-caption text-text-secondary line-clamp-2">
                             {stripHtml(p.summary.tldr)}
                           </p>
