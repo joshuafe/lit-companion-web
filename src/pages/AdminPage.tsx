@@ -100,6 +100,38 @@ export default function AdminPage() {
   const [sortKey, setSortKey] = useState<SortKey>("last_action");
   const [sortDesc, setSortDesc] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [invitingId, setInvitingId] = useState<string | null>(null);
+  const [inviteResult, setInviteResult] = useState<{
+    email: string; code: string; link: string; sent: boolean; email_error?: string;
+  } | null>(null);
+
+  async function sendInvite(w: WaitlistEntry) {
+    setInvitingId(w.id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/send-invite`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ waitlist_id: w.id }),
+      });
+      const body = await res.json();
+      if (!res.ok) { alert(`Send failed: ${body.error || res.status}`); return; }
+      setInviteResult({
+        email: body.target_email || w.email,
+        code: body.code, link: body.link,
+        sent: !!body.sent, email_error: body.email_error,
+      });
+      // Optimistically flip invited_at on the local row.
+      setWaitlist((prev) => prev.map((x) =>
+        x.id === w.id ? { ...x, invited_at: new Date().toISOString() } : x));
+    } finally {
+      setInvitingId(null);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -285,9 +317,99 @@ export default function AdminPage() {
                     </div>
                   )}
                 </div>
+                {!w.invited_at && (
+                  <button
+                    type="button"
+                    disabled={invitingId === w.id}
+                    onClick={() => sendInvite(w)}
+                    className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-jewel-emerald text-white hover:shadow-md disabled:opacity-50 transition"
+                  >
+                    {invitingId === w.id ? "Sending…" : "Send invite"}
+                  </button>
+                )}
               </li>
             ))}
           </ol>
+        </div>
+      )}
+
+      {inviteResult && (
+        <div
+          className="fixed inset-0 z-30 bg-text-primary/40 flex items-center justify-center p-4"
+          onClick={() => setInviteResult(null)}
+        >
+          <div
+            className="bg-bg-card rounded-2xl shadow-2xl border border-stroke max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-eyebrow font-semibold text-jewel-emerald uppercase tracking-wider mb-2">
+              {inviteResult.sent ? "Invite emailed" : "Invite code minted"}
+            </div>
+            <div className="font-serif text-[20px] font-semibold leading-tight mb-3">
+              {inviteResult.email}
+            </div>
+            <div className="space-y-3 text-sm">
+              <div>
+                <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider mb-1">Code</div>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(inviteResult.code)}
+                  className="font-mono text-[18px] tracking-widest bg-bg-primary border border-stroke rounded-xl px-4 py-2 w-full text-left hover:border-jewel-emerald/40"
+                  title="Click to copy"
+                >
+                  {inviteResult.code}
+                </button>
+              </div>
+              <div>
+                <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider mb-1">Link</div>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(inviteResult.link)}
+                  className="font-mono text-[12px] bg-bg-primary border border-stroke rounded-xl px-4 py-2 w-full text-left truncate hover:border-jewel-emerald/40"
+                  title="Click to copy"
+                >
+                  {inviteResult.link}
+                </button>
+              </div>
+              {inviteResult.sent ? (
+                <p className="text-caption text-jewel-emerald">
+                  ✓ Sent via Resend. Single-use, expires in 30 days.
+                </p>
+              ) : (
+                <div className="bg-warn-bg border border-jewel-topaz/30 rounded-xl p-3 space-y-2">
+                  <p className="text-caption text-text-primary">
+                    <strong>Email not sent</strong> — copy the code above and email
+                    it yourself. The code is live and the waitlist row is marked invited.
+                  </p>
+                  {inviteResult.email_error && (
+                    <p className="text-[11px] text-text-secondary font-mono break-all">
+                      {inviteResult.email_error}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const subject = encodeURIComponent("Your Literature Companion invite");
+                      const body = encodeURIComponent(
+                        `You're in.\n\nOpen ${inviteResult.link} and use this invite code to sign up: ${inviteResult.code}\n\nThis code is single-use and expires in 30 days.\n\n— Literature Companion`,
+                      );
+                      window.location.href = `mailto:${inviteResult.email}?subject=${subject}&body=${body}`;
+                    }}
+                    className="w-full px-3 py-1.5 rounded-full text-[11px] font-semibold bg-jewel-emerald text-white"
+                  >
+                    Open in mail client →
+                  </button>
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setInviteResult(null)}
+              className="mt-5 w-full px-3 py-2 rounded-full text-sm font-medium bg-bg-primary border border-stroke"
+            >
+              Done
+            </button>
+          </div>
         </div>
       )}
 
