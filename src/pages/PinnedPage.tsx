@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import type { Paper } from "../lib/types";
 import SwipeRow from "../components/SwipeRow";
+import { parseTitleType } from "../lib/text";
 
 // BibTeX cite-key from first-author last name + year + first significant word.
 // Build display groups based on the user's chosen axis.
@@ -389,7 +390,7 @@ export default function PinnedPage() {
                           </span>
                         </div>
                         <div className="mt-1.5 font-serif text-[15px] font-semibold leading-snug text-text-primary line-clamp-2">
-                          {stripHtml(p.title)}
+                          {stripHtml(parseTitleType(p.title).display)}
                         </div>
                         {note && (
                           <div className="mt-1 text-caption text-jewel-emerald italic line-clamp-2 font-serif">

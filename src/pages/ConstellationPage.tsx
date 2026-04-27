@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import type { Paper } from "../lib/types";
-import { stripHtml } from "../lib/text";
+import { stripHtml, parseTitleType } from "../lib/text";
 
 // Topic Constellation — prototype.
 //
@@ -341,7 +341,7 @@ export default function ConstellationPage() {
                     {p.journal || "Unknown journal"}
                   </div>
                   <div className="font-serif text-[15px] leading-snug text-text-primary line-clamp-2 mt-1">
-                    {stripHtml(p.title)}
+                    {stripHtml(parseTitleType(p.title).display)}
                   </div>
                 </Link>
               </li>
@@ -367,7 +367,7 @@ export default function ConstellationPage() {
                     {p.journal || "Unknown journal"}
                   </div>
                   <div className="font-serif text-[15px] leading-snug text-text-primary line-clamp-2 mt-1">
-                    {stripHtml(p.title)}
+                    {stripHtml(parseTitleType(p.title).display)}
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-1">
                     {(p.summary?.tags_suggested || []).slice(0, 4).map((t) => (

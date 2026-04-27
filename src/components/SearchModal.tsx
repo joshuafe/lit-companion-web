@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import type { Paper } from "../lib/types";
-import { stripHtml } from "../lib/text";
+import { stripHtml, parseTitleType } from "../lib/text";
 
 export default function SearchModal({ onClose }: { onClose: () => void }) {
   const [q, setQ] = useState("");
@@ -103,7 +103,7 @@ export default function SearchModal({ onClose }: { onClose: () => void }) {
                       {p.journal || "Unknown journal"}
                     </div>
                     <div className="text-sm font-semibold text-text-primary leading-snug line-clamp-2 mt-0.5">
-                      {stripHtml(p.title)}
+                      {stripHtml(parseTitleType(p.title).display)}
                     </div>
                     <div className="text-caption text-text-secondary line-clamp-1 mt-0.5">
                       {(p.authors || [])[0] || ""}

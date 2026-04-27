@@ -31,3 +31,44 @@ export function stripHtml(s: string | null | undefined): string {
   );
   return out.replace(_WS_RE, " ").trim();
 }
+
+// PubMed and publisher RSS prefix some titles with a bracketed type
+// label: "[Clinical image] ...", "[Case report] ...", "[Letter] ...".
+// Surface them as typed chips and strip them from the displayed title.
+//
+// Items in this map are KEPT in the feed (they're real content); we
+// just signal what kind of thing they are. NON_RESEARCH_PREFIXES in
+// content_filter.py removes editorial/news entirely — different intent.
+const _BRACKET_TYPES: Record<string, string> = {
+  "clinical image": "Clinical image",
+  "case report": "Case report",
+  "image": "Image",
+  "case": "Case report",
+  "perspective": "Perspective",
+  "perspectives": "Perspective",
+  "viewpoint": "Viewpoint",
+  "review": "Review",
+  "research letter": "Research letter",
+};
+
+export interface TitleType {
+  display: string;
+  typeChip: string | null;
+}
+
+/**
+ * Extract a bracketed type prefix from a title. Returns the cleaned
+ * title plus the chip label (e.g. "Clinical image") if recognized.
+ * Unrecognized brackets are left in place — never silently lose info.
+ */
+export function parseTitleType(title: string | null | undefined): TitleType {
+  const t = (title || "").trim();
+  if (!t.startsWith("[")) return { display: t, typeChip: null };
+  const m = t.match(/^\[([^\]]+)\]\s*[:.\-—]?\s*(.+)$/);
+  if (!m) return { display: t, typeChip: null };
+  const inside = m[1].trim().toLowerCase();
+  const rest = m[2].trim();
+  const chip = _BRACKET_TYPES[inside];
+  if (!chip) return { display: t, typeChip: null };
+  return { display: rest, typeChip: chip };
+}

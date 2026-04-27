@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import type { Paper } from "../lib/types";
-import { stripHtml } from "../lib/text";
+import { stripHtml, parseTitleType } from "../lib/text";
 
 export default function PaperDetailPage() {
   const { id } = useParams();
@@ -253,7 +253,7 @@ export default function PaperDetailPage() {
     const inst = paper.last_author_institution || paper.first_author_institution || "";
     const oneLiner = paper.summary?.key_claim ||
       paper.summary?.tldr ||
-      (paper.abstract ? paper.abstract.slice(0, 240) + "…" : "");
+      (paper.abstract ? stripHtml(paper.abstract).slice(0, 240) + "…" : "");
     const lines: string[] = [paper.title];
     if (authors) lines.push("");
     if (authors) lines.push(authors + (inst ? ` · ${inst}` : ""));
@@ -343,7 +343,7 @@ export default function PaperDetailPage() {
         <VersionTag paper={paper} />
       </div>
       <h1 className="mt-2 text-[22px] font-semibold leading-snug text-text-primary">
-        {stripHtml(paper.title)}
+        {stripHtml(parseTitleType(paper.title).display)}
       </h1>
       <div className="mt-1 text-caption text-text-secondary">
         {(paper.authors || []).slice(0, 8).join(", ")}
@@ -391,13 +391,13 @@ export default function PaperDetailPage() {
 
       {s ? (
         <>
-          <Section label="KEY CLAIM" body={s.key_claim} />
+          <Section label="KEY CLAIM" body={stripHtml(s.key_claim)} />
           <div className="mt-4 bg-bg-card rounded-xl p-4 font-serif text-[16px] leading-relaxed text-text-primary">
-            {s.tldr}
+            {stripHtml(s.tldr)}
           </div>
 
           {s.figure_highlight && (
-            <Section label="FIGURE HIGHLIGHT" body={s.figure_highlight} />
+            <Section label="FIGURE HIGHLIGHT" body={stripHtml(s.figure_highlight)} />
           )}
 
           <div className="mt-5">
@@ -444,7 +444,7 @@ export default function PaperDetailPage() {
           )}
         </>
       ) : paper.abstract ? (
-        <Section label="ABSTRACT" body={paper.abstract} />
+        <Section label="ABSTRACT" body={stripHtml(paper.abstract)} />
       ) : (
         <p className="mt-6 text-text-secondary">
           No structured summary yet — full summarization will land in the next pipeline run.

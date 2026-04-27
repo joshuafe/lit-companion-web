@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { supabase, SUPABASE_URL } from "../lib/supabase";
-import { stripHtml } from "../lib/text";
+import { stripHtml, parseTitleType } from "../lib/text";
 
 interface Paper {
   id: string;
@@ -305,7 +305,7 @@ function TopPapers({ papers }: { papers: Paper[] }) {
                     {Math.round(score * 100)}
                   </span>
                   <span className="text-[12px] text-text-primary truncate">
-                    {stripHtml(p.title)}
+                    {stripHtml(parseTitleType(p.title).display)}
                   </span>
                 </div>
               </div>
@@ -426,7 +426,7 @@ function BriefingTimeline({ briefings, papers }: { briefings: Briefing[]; papers
               const p = paperById[pid];
               return (
                 <li key={pid} className="text-[12px] text-text-primary truncate">
-                  {p ? `${Math.round((p.relevance_score ?? 0) * 100)} · ${stripHtml(p.title)}` : pid.slice(0, 8)}
+                  {p ? `${Math.round((p.relevance_score ?? 0) * 100)} · ${stripHtml(parseTitleType(p.title).display)}` : pid.slice(0, 8)}
                 </li>
               );
             })}

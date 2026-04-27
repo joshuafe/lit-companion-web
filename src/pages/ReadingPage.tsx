@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import type { Paper } from "../lib/types";
-import { stripHtml } from "../lib/text";
+import { stripHtml, parseTitleType } from "../lib/text";
 
 // Reading deck — full-page swipeable cards for dog-eared papers.
 //
@@ -202,7 +202,7 @@ function ReadingCard({
         {paper.journal || "Unknown journal"}
       </div>
       <h1 className="mt-2 text-[26px] sm:text-[30px] font-semibold leading-tight text-text-primary pr-12">
-        {stripHtml(paper.title)}
+        {stripHtml(parseTitleType(paper.title).display)}
       </h1>
       <div className="mt-2 text-caption text-text-secondary">
         {(paper.authors || []).slice(0, 6).join(", ")}
@@ -223,9 +223,9 @@ function ReadingCard({
 
       {s ? (
         <>
-          <Section label="Key claim" body={s.key_claim} />
+          <Section label="Key claim" body={stripHtml(s.key_claim)} />
           <div className="mt-4 bg-bg-primary/60 rounded-xl p-5 font-serif text-[17px] leading-relaxed text-text-primary">
-            {s.tldr}
+            {stripHtml(s.tldr)}
           </div>
           {s.findings?.length > 0 && (
             <div className="mt-5">
@@ -254,7 +254,7 @@ function ReadingCard({
         </>
       ) : paper.abstract ? (
         <p className="mt-4 font-serif text-[17px] leading-relaxed text-text-primary">
-          {paper.abstract}
+          {stripHtml(paper.abstract)}
         </p>
       ) : (
         <p className="mt-6 text-text-secondary">No summary yet.</p>

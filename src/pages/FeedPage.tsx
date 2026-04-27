@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import type { Paper, Briefing } from "../lib/types";
 import TIER_1_RAW from "../lib/tier1Journals.json";
+import { stripHtml as libStripHtml, parseTitleType } from "../lib/text";
+import SwipeRow from "../components/SwipeRow";
 
 const LONG_PRESS_MS = 500;
 
@@ -91,10 +93,8 @@ function isJunk(title: string | null | undefined): boolean {
   return NON_RESEARCH_PREFIXES.some((p) => t.startsWith(p));
 }
 
-function stripHtml(s: string | null | undefined): string {
-  if (!s) return "";
-  return s.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
+// Centralized in lib/text.ts. Local alias keeps existing call-sites short.
+const stripHtml = libStripHtml;
 
 function isToday(d: string | null | undefined): boolean {
   if (!d) return false;
@@ -117,6 +117,10 @@ function fmtDate(iso: string | null | undefined): string {
 // Derive compact feature chips from paper metadata.
 function featureChips(p: Paper): { label: string; tone: "warm" | "cool" | "accent" }[] {
   const chips: { label: string; tone: "warm" | "cool" | "accent" }[] = [];
+  // Title-type chip from any leading bracket prefix ("[Clinical image]")
+  // — surfaces the kind of paper without the bracket showing in the title.
+  const { typeChip } = parseTitleType(p.title);
+  if (typeChip) chips.push({ label: typeChip, tone: "cool" });
   const title = (p.title || "").toLowerCase();
   const doi = (p.doi || "").toLowerCase();
 
@@ -212,6 +216,19 @@ export default function FeedPage() {
       playPinChime();
     }
     setTimeout(() => setFlash(null), 2000);
+  }
+
+  // Swipe-left dismiss on Feed cards — same flow as Library's swipe-left.
+  // Drops the paper from the visible feed and writes a dismissal so the
+  // sort never resurfaces it (also drops it from any future briefing).
+  async function dismissPaper(p: Paper) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from("dismissals").upsert({ user_id: user.id, paper_id: p.id });
+    setPapers((ps) => ps.filter((x) => x.id !== p.id));
+    setFlash(`Dismissed "${p.title.slice(0, 40)}…"`);
+    if (navigator.vibrate) navigator.vibrate(8);
+    setTimeout(() => setFlash(null), 1800);
   }
 
   // Dog-ear toggle — "come back to this in a minute" intent. Lighter
@@ -375,9 +392,7 @@ export default function FeedPage() {
     const wasSeenAtTop = (p: Paper): boolean =>
       seenTopIds.has(p.id) && !isVeryFresh(p);
     // DOI-level dedup: a single paper sometimes lands twice when RSS
-    // and PubMed disagree on the journal name ("Nat Rev Immunol" vs
-    // "Nature reviews. Immunology") — same DOI, different rows. Keep
-    // the first occurrence in relevance order so the dedup is stable.
+    // and PubMed disagree on the journal name. Keep first occurrence.
     const seenDoi = new Set<string>();
     const dedupByDoi = (p: Paper) => {
       const d = (p.doi || "").trim().toLowerCase();
@@ -386,18 +401,79 @@ export default function FeedPage() {
       seenDoi.add(d);
       return true;
     };
+    // Defensive ID dedup — if anything in the chain (server, cache, the
+    // session-order remap) returns the same row twice, this catches it.
+    // User flagged this as the more likely cause of perceived dupes than
+    // actual database duplicates.
+    const seenIds = new Set<string>();
+    const dedupById = (p: Paper) => {
+      if (seenIds.has(p.id)) return false;
+      seenIds.add(p.id);
+      return true;
+    };
+    // #4a: hide papers with no body text — empty card is worse than
+    // missing card. Falls through if EITHER summary.tldr OR abstract has
+    // real content (the render layer will use abstract when tldr is null).
+    const hasBody = (p: Paper) => {
+      const tldr = (p.summary?.tldr || "").trim();
+      const abs = (p.abstract || "").trim();
+      return tldr.length > 0 || abs.length > 50;
+    };
     const ranked = ((rows as Paper[]) || [])
       .filter((p) => !isJunk(p.title))
       .filter((p) => !dismissedSet.has(p.id))
       .filter((p) => !pinnedSet.has(p.id))
       .filter((p) => !(hideSeen && isBriefed(p)))
+      .filter(hasBody)
       .filter((p) => {
         // Preprint dedup: hide preprint when its published twin is here.
         if (p.published_doi && allDois.has(p.published_doi)) return false;
         return true;
       })
       .filter(dedupByDoi)
-      .sort((a, b) => {
+      .filter(dedupById);
+
+    // #6: session-order persistence. If we have a cached order from a
+    // recent visit (last 5 minutes) and ALL the cached IDs still appear
+    // in the candidate set, render in that order. Prevents the feed
+    // from reshuffling when the user bounces Feed → Paper → Feed and
+    // loses their place. After the TTL, fresh ranking applies.
+    const SESSION_ORDER_TTL_MS = 5 * 60 * 1000;
+    const orderCacheRaw = sessionStorage.getItem("feed.orderCache");
+    let cachedIds: string[] | null = null;
+    if (orderCacheRaw) {
+      try {
+        const cached = JSON.parse(orderCacheRaw) as { ts: number; ids: string[] };
+        if (Date.now() - cached.ts < SESSION_ORDER_TTL_MS) {
+          const idSet = new Set(ranked.map((p) => p.id));
+          if (cached.ids.every((id) => idSet.has(id))) {
+            cachedIds = cached.ids;
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    let ordered: Paper[];
+    if (cachedIds) {
+      const byId = new Map(ranked.map((p) => [p.id, p] as const));
+      // De-dupe cached IDs while preserving order — defensive against
+      // cache corruption or any path that wrote duplicate ids in.
+      const seenInOrder = new Set<string>();
+      ordered = [];
+      for (const id of cachedIds) {
+        if (seenInOrder.has(id)) continue;
+        const p = byId.get(id);
+        if (!p) continue;
+        seenInOrder.add(id);
+        ordered.push(p);
+      }
+      // Append any new candidates (not in cache) at the bottom.
+      for (const p of ranked) if (!seenInOrder.has(p.id)) {
+        seenInOrder.add(p.id);
+        ordered.push(p);
+      }
+    } else {
+      ordered = ranked.slice().sort((a, b) => {
         // 1. Already seen-at-top demotion — biggest signal, applies first
         //    so the same paper never camps top across refreshes (unless
         //    very fresh; <90 min papers are exempt).
@@ -416,11 +492,19 @@ export default function FeedPage() {
         return (b.relevance_score ?? 0) - (a.relevance_score ?? 0);
       })
       .slice(0, 20);
+    }
+
+    // Persist the rendered order so a Feed → Paper → Feed bounce
+    // returns the same ordering for SESSION_ORDER_TTL_MS.
+    sessionStorage.setItem("feed.orderCache", JSON.stringify({
+      ts: Date.now(),
+      ids: ordered.slice(0, 20).map((p) => p.id),
+    }));
 
     // After ranking, mark the top SEEN_TOP_TRACK papers as "seen at top"
     // for the next load. Skip very-fresh papers — they get to keep
     // their top slot until they age past the 90-min window.
-    const newlySeen = ranked
+    const newlySeen = ordered
       .slice(0, SEEN_TOP_TRACK)
       .filter((p) => !isVeryFresh(p))
       .map((p) => p.id);
@@ -445,7 +529,7 @@ export default function FeedPage() {
       setSeenTopIds(new Set(trimmed.map((x) => x.id)));
     }
 
-    setPapers(ranked);
+    setPapers(ordered.slice(0, 20));
     setPinnedIDs(new Set((pins || []).map((p: any) => p.paper_id)));
     setDogEaredIDs(new Set((dogEars || []).map((d: any) => d.paper_id)));
     setLoading(false);
@@ -695,7 +779,7 @@ export default function FeedPage() {
                 {/* Hero deliberately omits the rank pill — its size says "headline". */}
               </div>
               <h2 className="text-[22px] font-semibold leading-snug text-text-primary line-clamp-3">
-                {stripHtml(p.title)}
+                {stripHtml(parseTitleType(p.title).display)}
               </h2>
               {p.summary?.tldr && (
                 <p className="mt-2.5 text-[15px] leading-relaxed text-text-primary line-clamp-4">
@@ -807,20 +891,17 @@ export default function FeedPage() {
             (Date.now() - Date.parse(p.created_at)) < 90 * 60 * 1000;
           return (
             <li key={p.id} id={`feed-card-${p.id}`}>
+              <SwipeRow
+                onTap={() => navigate(`/paper/${p.id}`)}
+                swipeLeft={{ label: "Dismiss", bg: "bg-jewel-ruby", onCommit: () => dismissPaper(p) }}
+                swipeRight={pinnedIDs.has(p.id) ? undefined : { label: "★ Save", bg: "bg-jewel-topaz", onCommit: () => pinForLater(p) }}
+              >
               <div
                 role="button"
                 tabIndex={0}
-                onClick={(e) => handleNav(e as any, p.id)}
                 onKeyDown={(e) => { if (e.key === "Enter") navigate(`/paper/${p.id}`); }}
-                onTouchStart={() => startLongPress(p)}
-                onTouchEnd={cancelLongPress}
-                onTouchMove={cancelLongPress}
-                onTouchCancel={cancelLongPress}
-                onMouseDown={() => startLongPress(p)}
-                onMouseUp={cancelLongPress}
-                onMouseLeave={cancelLongPress}
                 onContextMenu={(e) => { e.preventDefault(); pinForLater(p); }}
-                className={`relative block bg-bg-card rounded-card overflow-hidden active:opacity-80 transition cursor-pointer select-none ${accentClass} ${
+                className={`relative block bg-bg-card rounded-card overflow-hidden cursor-pointer select-none ${accentClass} ${
                   papers[focusedIdx]?.id === p.id
                     ? "ring-2 ring-jewel-emerald ring-offset-2 ring-offset-bg-primary"
                     : ""
@@ -856,7 +937,7 @@ export default function FeedPage() {
                 )}
 
                 <h2 className="mt-1.5 text-[15px] font-semibold leading-snug text-text-primary line-clamp-2">
-                  {stripHtml(p.title)}
+                  {stripHtml(parseTitleType(p.title).display)}
                 </h2>
 
                 {p.hero_image_url && (
@@ -931,6 +1012,7 @@ export default function FeedPage() {
                 </div>
                 </div>
               </div>
+              </SwipeRow>
             </li>
           );
         })}
