@@ -752,6 +752,20 @@ export default function FeedPage() {
           const p = paperRaw;
           const chips = featureChips(p);
           const inst = p.last_author_institution || p.first_author_institution;
+          // Tier-driven left-border accent so cards aren't visually
+          // identical at a glance: T1 = topaz, top-quartile relevance =
+          // emerald, discovery = sapphire. Plus a "JUST IN" flag when
+          // the row is < 90 min old.
+          const isT1 = isTier1(p.journal);
+          const relPct = rankByIndex[i] / Math.max(1, papers.length);
+          const isStrong = !isT1 && relPct < 0.25;
+          const accentClass = isT1
+            ? "border-l-[3px] border-l-jewel-topaz"
+            : isStrong
+            ? "border-l-[3px] border-l-jewel-emerald"
+            : "border-l-[3px] border-l-jewel-sapphire/40";
+          const justIn = !!p.created_at &&
+            (Date.now() - Date.parse(p.created_at)) < 90 * 60 * 1000;
           return (
             <li key={p.id} id={`feed-card-${p.id}`}>
               <div
@@ -767,7 +781,7 @@ export default function FeedPage() {
                 onMouseUp={cancelLongPress}
                 onMouseLeave={cancelLongPress}
                 onContextMenu={(e) => { e.preventDefault(); pinForLater(p); }}
-                className={`block bg-bg-card rounded-card overflow-hidden active:opacity-80 transition cursor-pointer select-none ${
+                className={`block bg-bg-card rounded-card overflow-hidden active:opacity-80 transition cursor-pointer select-none ${accentClass} ${
                   papers[focusedIdx]?.id === p.id
                     ? "ring-2 ring-jewel-emerald ring-offset-2 ring-offset-bg-primary"
                     : ""
@@ -802,7 +816,14 @@ export default function FeedPage() {
                   </div>
                 </div>
 
-                <h2 className="mt-2 text-[17px] font-semibold leading-snug text-text-primary line-clamp-3">
+                {justIn && (
+                  <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-jewel-topaz">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-jewel-topaz animate-pulse" />
+                    Just in
+                  </div>
+                )}
+
+                <h2 className="mt-1.5 text-[15px] font-semibold leading-snug text-text-primary line-clamp-2">
                   {stripHtml(p.title)}
                 </h2>
 
@@ -833,7 +854,9 @@ export default function FeedPage() {
                 )}
 
                 {p.summary?.tldr && (
-                  <p className="mt-3 font-serif text-[15px] leading-snug text-text-primary line-clamp-4">
+                  <p className={`mt-2 font-serif text-[14px] leading-snug text-text-primary/85 ${
+                    p.hero_image_url ? "line-clamp-2" : "line-clamp-3"
+                  }`}>
                     {stripHtml(p.summary.tldr)}
                   </p>
                 )}
