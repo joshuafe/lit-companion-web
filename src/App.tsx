@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, NavLink, useLocation } from "react-router-dom"
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import AuthPage from "./pages/AuthPage";
+import TourPage from "./pages/TourPage";
 import FeedPage from "./pages/FeedPage";
 import PaperDetailPage from "./pages/PaperDetailPage";
 import BriefingPage from "./pages/BriefingPage";
@@ -73,6 +74,9 @@ export default function App() {
     );
   }
 
+  // Public /tour — bypasses auth gate so it can be linked / shared.
+  if (window.location.pathname === "/tour") return <TourPage />;
+
   if (!session) return <AuthPage />;
 
   // Wait for the onboarding check to complete before rendering routes —
@@ -95,6 +99,7 @@ export default function App() {
         <main className="flex-1 pb-24 lg:pb-12 lg:min-h-screen">
           <Routes>
             <Route path="/welcome" element={<OnboardingPage />} />
+            <Route path="/tour" element={<TourPage />} />
             <Route
               path="/"
               element={needsOnboarding ? <Navigate to="/welcome" replace /> : <FeedPage />}

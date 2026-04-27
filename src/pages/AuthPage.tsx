@@ -141,11 +141,11 @@ export default function AuthPage() {
 
           <h1 className="font-serif text-[44px] sm:text-[64px] leading-[1.05] font-semibold tracking-tight max-w-3xl">
             The literature, <span className="text-jewel-emerald">narrated</span> —
-            shaped by your taste.
+            shaped by your interests.
           </h1>
           <p className="mt-6 text-[18px] sm:text-[20px] leading-relaxed font-serif text-text-primary/85 max-w-2xl">
             A research feed that reads PubMed every morning against{" "}
-            <em>your</em> seeds, ranks the day's papers, and renders a 5–10
+            <em>your</em> interests, ranks the day's papers, and renders a 5–10
             minute audio briefing you can listen to over coffee.
           </p>
 
@@ -163,7 +163,7 @@ export default function AuthPage() {
               Sign in
             </button>
             <span className="text-caption text-text-secondary ml-2">
-              Built for clinician-scientists. ORCID supported.
+              Built for clinician-scientists.
             </span>
           </div>
 
@@ -181,27 +181,21 @@ export default function AuthPage() {
           What you get
         </div>
         <h2 className="font-serif text-[34px] sm:text-[42px] font-semibold leading-tight max-w-2xl mb-10">
-          Three things a research feed should actually do.
+          Two things a research feed should actually do.
         </h2>
 
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className="grid md:grid-cols-2 gap-4">
           <Pillar
             tone="emerald"
             tag="01 · Ranked"
-            title="A taste-shaped feed"
-            body="Seed it with papers, an ORCID, or a sentence about your work. SPECTER2 embeds your taste; cosine similarity ranks every new paper against it. Top journals first, then thoughtful discovery picks."
+            title="An interest-shaped feed"
+            body="Seed it with papers, an ORCID, or a sentence about your work. Every new paper from PubMed gets ranked against what you actually care about. Top journals first, then thoughtful discovery picks."
           />
           <Pillar
             tone="topaz"
             tag="02 · Spoken"
             title="A morning briefing"
-            body="Every weekday at 5:30 your time, a 5–10 min audio digest lands in your feed. Editorial tone, not robotic — written like a friend who read the literature so you didn't have to. Pin papers from the lock screen."
-          />
-          <Pillar
-            tone="amethyst"
-            tag="03 · Visual"
-            title="A topic constellation"
-            body="Your reading rendered as a star map. Tag clusters, bridge papers (the unknowns spanning two topics), surprise picks. Drag, tap, dismiss — make the model match how you actually think."
+            body="Every weekday at 5:30 your time, a 5–10 min audio digest lands in your feed. Editorial tone, not robotic — written like a friend who read the literature so you didn't have to."
           />
         </div>
       </section>
@@ -212,13 +206,13 @@ export default function AuthPage() {
           How it works
         </div>
         <h2 className="font-serif text-[34px] sm:text-[42px] font-semibold leading-tight max-w-3xl mb-12">
-          One minute to set up. Forever to read smarter.
+          Set it up once. Read smarter every morning.
         </h2>
 
         <div className="grid md:grid-cols-4 gap-6">
           <Step
             num="1"
-            title="Tell it your taste"
+            title="Tell it your interests"
             body="ORCID import, paper DOIs, or a sentence in your own words. Three options, pick whichever's fastest."
           />
           <Step
@@ -228,8 +222,8 @@ export default function AuthPage() {
           />
           <Step
             num="3"
-            title="Pipeline runs"
-            body="Mac-side daemon reads PubMed every 90 min; renders an audio briefing each morning at 5:30."
+            title="We do the reading"
+            body="We find the things you don't want to miss — ranked against your interests, surfaced as a feed and a morning audio briefing."
           />
           <Step
             num="4"
@@ -250,17 +244,17 @@ export default function AuthPage() {
               Built by a clinician-scientist for clinician-scientists.
             </h2>
             <p className="font-serif text-[17px] leading-relaxed text-text-primary/85">
-              The papers you actually want are buried under conference
-              abstracts, predatory-journal noise, and topical near-misses.
-              Literature Companion filters by signal — abstracts must be
-              real, journals must matter, your seeds must point somewhere.
+              When you search, the papers you actually want are buried under
+              conference abstracts, predatory-journal noise, and topical
+              near-misses. Literature Companion filters by signal — abstracts
+              must be real, journals must matter, your interests must point
+              somewhere.
             </p>
             <ul className="mt-5 space-y-2 text-[15px] font-serif">
               <li>· Curated tier-1 list across heme/onc, GI, immunology, cardio, neuro, ID, rheum</li>
-              <li>· Frontiers / MDPI / OMICS predatory venues blocked by default</li>
+              <li>· Predatory publishers blocked by default</li>
               <li>· Conference abstracts auto-filtered — no signal in title alone</li>
               <li>· Author-following: every new paper from a PI you care about</li>
-              <li>· Institutional proxy support for paywalled full-text</li>
             </ul>
           </div>
           <div>
@@ -454,7 +448,7 @@ export default function AuthPage() {
       </section>
 
       <footer className="max-w-5xl mx-auto px-6 py-10 border-t border-stroke text-caption text-text-secondary text-center">
-        Built at Weill Cornell · Pipeline runs on a Mac, not in your inbox · No tracking, no sharing.
+        © Joshua A. Fein 2026
       </footer>
     </div>
   );
@@ -479,9 +473,9 @@ function FeedPreview() {
         </div>
         <div className="px-5 py-4 space-y-3">
           {[
-            { tag: "★ Blood", title: "Single-cell maps reveal a regulatory T-cell axis sustaining HSCT chimerism", chip: "RCT" },
-            { tag: "Nat Med", title: "Tirzepatide reduces MACE in obesity-only cohort — 5-year follow-up", chip: "trial" },
-            { tag: "Cell", title: "IFNγ memory in human macrophages is sustained by cytokine signaling itself", chip: "new" },
+            { tag: "Immunity", title: "Spatial profiling reveals tissue-resident memory T-cell micro-niches", chip: "review" },
+            { tag: "★ Blood", title: "Single-cell maps reveal a regulatory T-cell axis sustaining HSCT chimerism", chip: "research" },
+            { tag: "Cell", title: "FMT plus first-line checkpoint blockade boosts CD8⁺-driven tumor clearance", chip: "trial" },
           ].map((p, i) => (
             <div key={i} className="border-b border-stroke/60 last:border-0 pb-3 last:pb-0">
               <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider line-clamp-1">
