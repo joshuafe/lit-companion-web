@@ -170,6 +170,25 @@ export default function FeedPage() {
     // Persist toggle across sessions — feels broken when it resets every reload.
     return localStorage.getItem("feed.hideSeen") === "1";
   });
+  // Per-device memory of which paper IDs the user has *seen at the top
+  // of the feed* on prior loads. The same paper shouldn't camp the
+  // top spot across refreshes — once you've seen it there, it sinks
+  // below anything you haven't seen yet. Entries auto-expire after
+  // a few hours so the demotion isn't permanent.
+  const SEEN_TOP_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+  const SEEN_TOP_TRACK = 5; // top-N positions count as "seen at top"
+  const SEEN_TOP_MAX = 30;  // cap ring size
+  const [seenTopIds, setSeenTopIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem("feed.seenTop");
+      if (!raw) return new Set();
+      const parsed: { id: string; ts: number }[] = JSON.parse(raw);
+      const cutoff = Date.now() - SEEN_TOP_TTL_MS;
+      return new Set(parsed.filter((x) => x.ts > cutoff).map((x) => x.id));
+    } catch {
+      return new Set();
+    }
+  });
   const longPressTimer = useRef<number | null>(null);
   const longPressed = useRef(false);
   const navigate = useNavigate();
@@ -310,8 +329,20 @@ export default function FeedPage() {
     }
     // Pinned papers are now hidden from the feed entirely (they live in
     // /library). Briefed papers are demoted by default and hidden when
-    // the user toggles "Hide already seen".
+    // the user toggles "Hide already seen". Papers the user has already
+    // seen at the top of the feed in past loads are also demoted —
+    // EXCEPT if they're <90 min old, in which case they're so fresh
+    // they get to stay up regardless.
+    const NINETY_MIN_MS = 90 * 60 * 1000;
     const isBriefed = (p: Paper) => briefedSourceIds.has(String(p.source_id));
+    const isVeryFresh = (p: Paper): boolean => {
+      const t = p.created_at ? Date.parse(p.created_at) : 0;
+      return t > 0 && Date.now() - t < NINETY_MIN_MS;
+    };
+    // "Already shown to you at the top" — only counts if the paper isn't
+    // very fresh. A <90-min paper is allowed to sit at top across reloads.
+    const wasSeenAtTop = (p: Paper): boolean =>
+      seenTopIds.has(p.id) && !isVeryFresh(p);
     const ranked = ((rows as Paper[]) || [])
       .filter((p) => !isJunk(p.title))
       .filter((p) => !dismissedSet.has(p.id))
@@ -323,18 +354,52 @@ export default function FeedPage() {
         return true;
       })
       .sort((a, b) => {
-        // Briefed papers sink below fresh ones within their day bucket
-        // (they're not hidden unless the toggle is on, but they should
-        // never camp the top once you've already heard them in audio).
+        // 1. Already seen-at-top demotion — biggest signal, applies first
+        //    so the same paper never camps top across refreshes (unless
+        //    very fresh; <90 min papers are exempt).
+        const ta = wasSeenAtTop(a) ? 1 : 0;
+        const tb = wasSeenAtTop(b) ? 1 : 0;
+        if (ta !== tb) return ta - tb;
+        // 2. Briefed papers sink below fresh ones within their day.
         const ba = isBriefed(a) ? 1 : 0;
         const bb = isBriefed(b) ? 1 : 0;
         if (ba !== bb) return ba - bb;
+        // 3. Recency (per-day buckets).
         const da = daysOld(a);
         const db = daysOld(b);
         if (da !== db) return da - db;
+        // 4. Relevance.
         return (b.relevance_score ?? 0) - (a.relevance_score ?? 0);
       })
       .slice(0, 20);
+
+    // After ranking, mark the top SEEN_TOP_TRACK papers as "seen at top"
+    // for the next load. Skip very-fresh papers — they get to keep
+    // their top slot until they age past the 90-min window.
+    const newlySeen = ranked
+      .slice(0, SEEN_TOP_TRACK)
+      .filter((p) => !isVeryFresh(p))
+      .map((p) => p.id);
+    if (newlySeen.length > 0) {
+      const merged = [
+        ...newlySeen.map((id) => ({ id, ts: Date.now() })),
+        ...Array.from(seenTopIds).map((id) => ({ id, ts: Date.now() - 1 })),
+      ];
+      // De-dupe (keep first occurrence — newly-seen wins the timestamp),
+      // cap at SEEN_TOP_MAX, drop expired.
+      const cutoff = Date.now() - SEEN_TOP_TTL_MS;
+      const seen = new Set<string>();
+      const trimmed: { id: string; ts: number }[] = [];
+      for (const x of merged) {
+        if (seen.has(x.id)) continue;
+        if (x.ts < cutoff) continue;
+        seen.add(x.id);
+        trimmed.push(x);
+        if (trimmed.length >= SEEN_TOP_MAX) break;
+      }
+      localStorage.setItem("feed.seenTop", JSON.stringify(trimmed));
+      setSeenTopIds(new Set(trimmed.map((x) => x.id)));
+    }
 
     setPapers(ranked);
     setPinnedIDs(new Set((pins || []).map((p: any) => p.paper_id)));
