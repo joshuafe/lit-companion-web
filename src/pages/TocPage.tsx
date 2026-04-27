@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase, SUPABASE_URL } from "../lib/supabase";
 import SwipeRow from "../components/SwipeRow";
 
@@ -61,6 +61,23 @@ export default function TocPage() {
   const [pinningId, setPinningId] = useState<string | null>(null);
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
   const [flash, setFlash] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  // TOC tap routing: try in-app first. If we already have this paper
+  // (matched by DOI) navigate to PaperDetail; otherwise fall through to
+  // the publisher URL as before. Keeps the in-app experience intact for
+  // anything the pipeline has already ingested.
+  async function openTocItem(item: TocItem) {
+    if (item.doi) {
+      const { data } = await supabase
+        .from("papers").select("id").eq("doi", item.doi).limit(1).maybeSingle();
+      if (data?.id) {
+        navigate(`/paper/${data.id}`);
+        return;
+      }
+    }
+    if (item.link) window.open(item.link, "_blank", "noopener,noreferrer");
+  }
 
   useEffect(() => {
     (async () => {
@@ -278,7 +295,7 @@ export default function TocPage() {
                 return (
                   <li key={`${day}-${i}`}>
                     <SwipeRow
-                      onTap={() => item.link && window.open(item.link, "_blank", "noopener,noreferrer")}
+                      onTap={() => openTocItem(item)}
                       swipeRight={
                         pinned
                           ? undefined

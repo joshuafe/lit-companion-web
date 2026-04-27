@@ -506,7 +506,9 @@ export default function FeedPage() {
         pinForLater(papers[focusedIdx]);
       } else if (e.key === "?" && focusedIdx >= 0) {
         e.preventDefault();
-        setWhyPaper(papers[focusedIdx]);
+        // ? key opens the focused paper — the why-section lives at the
+        // bottom of PaperDetail now (no longer a modal on cards).
+        navigate(`/paper/${papers[focusedIdx].id}`);
       }
     }
     window.addEventListener("keydown", onKey);
@@ -843,18 +845,7 @@ export default function FeedPage() {
                       </span>
                     )}
                   </span>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <RelevancePill rank={rankByIndex[i]} total={papers.length} />
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setWhyPaper(p); }}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onTouchStart={(e) => e.stopPropagation()}
-                      aria-label="Why am I seeing this?"
-                      className="text-text-secondary/60 hover:text-text-primary text-[11px] w-5 h-5 rounded-full border border-text-secondary/30 flex items-center justify-center"
-                    >
-                      ?
-                    </button>
-                  </div>
+                  <RelevancePill rank={rankByIndex[i]} total={papers.length} />
                 </div>
 
                 {justIn && (

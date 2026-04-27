@@ -457,15 +457,45 @@ export default function PaperDetailPage() {
           Full text
         </div>
         <div className="space-y-2">
-          <a
-            href={paper.url}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center justify-between bg-jewel-emerald text-white rounded-xl px-4 py-3 text-sm font-semibold active:opacity-80"
-          >
-            <span>Open at publisher</span>
-            <span className="opacity-80">↗</span>
-          </a>
+          {/* Two distinct intents — publisher = the paper itself,
+              PubMed = the metadata/citations/related-articles graph.
+              Render as a 2-up grid when PMID is available; otherwise
+              full-width publisher button. */}
+          {(() => {
+            const isPubMedSourced = paper.source === "pubmed" && /^\d+$/.test(paper.source_id || "");
+            const pubmedUrl = isPubMedSourced
+              ? `https://pubmed.ncbi.nlm.nih.gov/${paper.source_id}/`
+              : null;
+            return pubmedUrl ? (
+              <div className="grid grid-cols-2 gap-2">
+                <a
+                  href={paper.url}
+                  target="_blank" rel="noreferrer"
+                  className="flex items-center justify-between bg-jewel-emerald text-white rounded-xl px-4 py-3 text-sm font-semibold active:opacity-80"
+                >
+                  <span>Publisher</span>
+                  <span className="opacity-80">↗</span>
+                </a>
+                <a
+                  href={pubmedUrl}
+                  target="_blank" rel="noreferrer"
+                  className="flex items-center justify-between bg-jewel-sapphire text-white rounded-xl px-4 py-3 text-sm font-semibold active:opacity-80"
+                >
+                  <span>PubMed</span>
+                  <span className="opacity-80">↗</span>
+                </a>
+              </div>
+            ) : (
+              <a
+                href={paper.url}
+                target="_blank" rel="noreferrer"
+                className="flex items-center justify-between bg-jewel-emerald text-white rounded-xl px-4 py-3 text-sm font-semibold active:opacity-80"
+              >
+                <span>Open at publisher</span>
+                <span className="opacity-80">↗</span>
+              </a>
+            );
+          })()}
           <button
             onClick={openViaProxy}
             className="w-full flex items-center justify-between bg-bg-card text-text-primary rounded-xl px-4 py-3 text-sm font-medium active:opacity-80 border border-stroke"
@@ -588,6 +618,11 @@ export default function PaperDetailPage() {
         </div>
       </div>
 
+      {/* Why-this-paper — moved here from feed-card '?' button per
+          user feedback. Inline at the bottom because by the time you
+          want to know 'why' you've already opened the paper. */}
+      <WhyThisPaper paper={paper} followedAuthors={followedAuthors} />
+
       {/* Sticky action bar — bottom on mobile, hidden on desktop where
           buttons live in the natural page flow. */}
       <div className="fixed bottom-16 inset-x-0 bg-bg-primary/95 backdrop-blur border-t border-stroke lg:hidden">
@@ -703,6 +738,75 @@ function PreprintLink({ paper }: { paper: Paper }) {
     <Link to={href}>{inner}</Link>
   ) : (
     <a href={href} target="_blank" rel="noreferrer">{inner}</a>
+  );
+}
+
+// Inline why-this-paper panel — replaces the per-card '?' modal that
+// fired before users had decided they cared. Now lives at the bottom
+// of the open paper, where the question is actually contextual.
+function WhyThisPaper({
+  paper, followedAuthors,
+}: { paper: Paper; followedAuthors: Set<string> }) {
+  const paperLastNames = new Set(
+    (paper.authors || []).map((a) => (a.split(/[\s,]+/)[0] || "").toLowerCase()),
+  );
+  const matched = Array.from(followedAuthors).filter((s) =>
+    paperLastNames.has((s.split(/[\s,]+/)[0] || "").toLowerCase()),
+  );
+  const score = paper.relevance_score;
+  const reason = paper.summary?.relevance?.reason;
+  const tags = paper.summary?.tags_suggested || [];
+  if (typeof score !== "number" && !reason && matched.length === 0 && tags.length === 0) {
+    return null;
+  }
+  return (
+    <details className="mt-6 border-t border-stroke pt-5 group">
+      <summary className="cursor-pointer text-eyebrow font-semibold text-text-secondary uppercase tracking-wider list-none flex items-center justify-between">
+        Why you're seeing this
+        <span className="text-text-secondary/50 text-xs group-open:rotate-180 transition-transform">▾</span>
+      </summary>
+      <div className="mt-3 space-y-3 text-sm">
+        {typeof score === "number" && (
+          <div>
+            <div className="text-caption text-text-secondary">Relevance to your seeds</div>
+            <div className="mt-0.5">
+              <span className="font-mono text-text-primary">{(score * 100).toFixed(1)}%</span>
+              <span className="text-text-secondary"> cosine</span>
+            </div>
+          </div>
+        )}
+        {matched.length > 0 && (
+          <div>
+            <div className="text-caption text-text-secondary mb-1">Followed authors on this paper</div>
+            <div className="flex flex-wrap gap-1.5">
+              {matched.map((a) => (
+                <span key={a} className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-jewel-emerald/15 text-jewel-emerald">
+                  {a}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        {reason && (
+          <div>
+            <div className="text-caption text-text-secondary">Editorial note</div>
+            <div className="mt-0.5 text-text-primary font-serif">{reason}</div>
+          </div>
+        )}
+        {tags.length > 0 && (
+          <div>
+            <div className="text-caption text-text-secondary mb-1">Tags</div>
+            <div className="flex flex-wrap gap-1.5">
+              {tags.slice(0, 8).map((t) => (
+                <span key={t} className="text-[11px] px-2 py-0.5 rounded-full bg-bg-card text-text-secondary">
+                  {t}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </details>
   );
 }
 
