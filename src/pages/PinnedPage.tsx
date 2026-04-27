@@ -268,7 +268,7 @@ export default function PinnedPage() {
      (tab === "dismissed" && dismissed.length === 0));
 
   return (
-    <div className="max-w-lg lg:max-w-5xl mx-auto px-5 lg:px-8 pt-10 pb-32">
+    <div className="max-w-lg lg:max-w-4xl mx-auto px-5 lg:px-10 pt-10 pb-32">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-[34px] font-semibold text-text-primary leading-tight">Library</h1>
@@ -362,7 +362,7 @@ export default function PinnedPage() {
               {heading}{" "}
               <span className="text-text-secondary/60 font-normal">· {rows.length}</span>
             </div>
-            <ul className="space-y-2 lg:grid lg:grid-cols-2 lg:gap-2 lg:space-y-0">
+            <ul className="space-y-2 lg:space-y-0 lg:columns-2 lg:gap-2 [&>li]:lg:break-inside-avoid [&>li]:lg:mb-2">
               {rows.map((r) => {
                 const p = r.papers!;
                 const when = tab === "pinned"

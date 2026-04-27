@@ -15,7 +15,6 @@ import AdminUserDetailPage from "./pages/AdminUserDetailPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import ConstellationPage from "./pages/ConstellationPage";
 import AddPaperPage from "./pages/AddPaperPage";
-import LatestPage from "./pages/LatestPage";
 import TocPage from "./pages/TocPage";
 import SearchModal from "./components/SearchModal";
 
@@ -103,7 +102,8 @@ export default function App() {
             <Route path="/briefing" element={<BriefingPage />} />
             <Route path="/library" element={<PinnedPage />} />
             <Route path="/library/add" element={<AddPaperPage />} />
-            <Route path="/latest" element={<LatestPage />} />
+            {/* /latest retired — TOC covers the same need with more value. */}
+            <Route path="/latest" element={<Navigate to="/toc" replace />} />
             <Route path="/toc" element={<TocPage />} />
             <Route path="/constellation" element={<ConstellationPage />} />
             <Route path="/settings" element={<SettingsPage />} />
@@ -123,11 +123,9 @@ export default function App() {
 
 const NAV_ITEMS = [
   { to: "/", label: "Feed", icon: "📰", match: (p: string) => p === "/" || p.startsWith("/paper") },
-  { to: "/latest", label: "Latest", icon: "⏱", match: (p: string) => p.startsWith("/latest") },
-  { to: "/toc", label: "Journal TOC", icon: "📑", match: (p: string) => p.startsWith("/toc"), desktopOnly: true },
+  { to: "/toc", label: "Journals", icon: "📑", match: (p: string) => p.startsWith("/toc") },
   { to: "/briefing", label: "Briefing", icon: "🎧", match: (p: string) => p.startsWith("/briefing") },
   { to: "/library", label: "Library", icon: "★", match: (p: string) => p.startsWith("/library") },
-  { to: "/constellation", label: "Constellation", icon: "✦", match: (p: string) => p.startsWith("/constellation"), desktopOnly: true },
   { to: "/settings", label: "Settings", icon: "⚙︎", match: (p: string) => p.startsWith("/settings") },
 ];
 
@@ -181,7 +179,9 @@ function Link({ to, children, className }: { to: string; children: React.ReactNo
 
 function MobileTabBar() {
   const { pathname } = useLocation();
-  const tabs = NAV_ITEMS.filter((t) => !t.desktopOnly);
+  // All NAV_ITEMS are mobile-friendly now that /latest and Constellation
+  // are pruned from the bottom bar. Constellation lives in Settings.
+  const tabs = NAV_ITEMS;
   return (
     <nav className="tab-bar fixed bottom-0 inset-x-0 bg-bg-primary/95 backdrop-blur border-t border-stroke z-10 lg:hidden">
       <div className="max-w-lg mx-auto flex">

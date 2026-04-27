@@ -239,7 +239,7 @@ export default function AdminPage() {
       )}
 
       {waitlist.length > 0 && (
-        <div className="bg-bg-card rounded-2xl p-4 mb-3 border border-jewel-topaz/20">
+        <div className="bg-gradient-to-br from-jewel-sapphire/12 via-jewel-topaz/8 to-transparent rounded-2xl p-4 mb-3 border border-jewel-sapphire/25">
           <div className="flex items-center justify-between mb-3">
             <div>
               <div className="text-eyebrow font-semibold text-jewel-topaz uppercase tracking-wider">

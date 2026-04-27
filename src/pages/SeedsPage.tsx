@@ -207,8 +207,8 @@ export default function SeedsPage() {
       </section>
 
       {suggestedAuthors.length > 0 && (
-        <section className="bg-bg-card rounded-2xl p-4 space-y-3">
-          <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
+        <section className="bg-gradient-to-br from-jewel-emerald/15 via-jewel-emerald/5 to-transparent border border-jewel-emerald/25 rounded-2xl p-4 space-y-3">
+          <div className="text-eyebrow font-semibold text-jewel-emerald uppercase tracking-wider">
             Authors you keep saving
           </div>
           <p className="text-caption text-text-secondary">

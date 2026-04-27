@@ -343,6 +343,18 @@ export default function FeedPage() {
     // very fresh. A <90-min paper is allowed to sit at top across reloads.
     const wasSeenAtTop = (p: Paper): boolean =>
       seenTopIds.has(p.id) && !isVeryFresh(p);
+    // DOI-level dedup: a single paper sometimes lands twice when RSS
+    // and PubMed disagree on the journal name ("Nat Rev Immunol" vs
+    // "Nature reviews. Immunology") — same DOI, different rows. Keep
+    // the first occurrence in relevance order so the dedup is stable.
+    const seenDoi = new Set<string>();
+    const dedupByDoi = (p: Paper) => {
+      const d = (p.doi || "").trim().toLowerCase();
+      if (!d) return true;
+      if (seenDoi.has(d)) return false;
+      seenDoi.add(d);
+      return true;
+    };
     const ranked = ((rows as Paper[]) || [])
       .filter((p) => !isJunk(p.title))
       .filter((p) => !dismissedSet.has(p.id))
@@ -353,6 +365,7 @@ export default function FeedPage() {
         if (p.published_doi && allDois.has(p.published_doi)) return false;
         return true;
       })
+      .filter(dedupByDoi)
       .sort((a, b) => {
         // 1. Already seen-at-top demotion — biggest signal, applies first
         //    so the same paper never camps top across refreshes (unless
@@ -488,7 +501,7 @@ export default function FeedPage() {
   }, [papers]);
 
   return (
-    <div className="max-w-lg lg:max-w-5xl mx-auto px-5 lg:px-8 pt-10">
+    <div className="max-w-lg lg:max-w-4xl mx-auto px-5 lg:px-10 pt-10">
       <header className="mb-6">
         {newSinceLast > 0 && (
           <div className="mb-1">
@@ -701,7 +714,7 @@ export default function FeedPage() {
       {todayBriefing?.audio_path && isToday(todayBriefing.briefing_date) && (
         <Link
           to="/briefing"
-          className="block mb-4 bg-gradient-to-br from-jewel-emerald to-jewel-emerald/80 text-white rounded-card p-4 active:opacity-90 shadow-sm"
+          className="block mb-4 bg-gradient-to-br from-jewel-emerald via-jewel-emerald/90 to-jewel-topaz text-white rounded-card p-4 active:opacity-90 shadow-md"
         >
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -722,7 +735,12 @@ export default function FeedPage() {
         </Link>
       )}
 
-      <ul className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
+      {/* Mobile: vertical stack. Desktop: CSS columns produce a true
+          masonry layout — each card flows to the shortest column so
+          tiles aren't artificially padded to align with their row-mate.
+          Children need break-inside-avoid + bottom margin (gap doesn't
+          work in column layout). */}
+      <ul className="space-y-3 lg:space-y-0 lg:columns-2 lg:gap-3 [&>li]:lg:break-inside-avoid [&>li]:lg:mb-3">
         {papers
           .map((p, idx) => ({ p, idx }))
           .filter(({ idx }) => {
@@ -789,15 +807,26 @@ export default function FeedPage() {
                 </h2>
 
                 {p.hero_image_url && (
-                  <div className="mt-3 -mx-4 aspect-[16/7] overflow-hidden bg-bg-primary">
+                  <div className="mt-3 -mx-4 overflow-hidden bg-bg-primary border-y border-stroke/40">
                     <img
                       src={p.hero_image_url}
                       alt=""
-                      className="w-full h-full object-cover"
+                      // object-contain (not -cover) so a small/wide source
+                      // figure isn't upscaled into fuzz. max-h caps so a
+                      // tall thumbnail can't dominate the card.
+                      className="w-full max-h-[280px] object-contain"
                       loading="lazy"
                       referrerPolicy="no-referrer"
                       onError={(e) => {
                         (e.target as HTMLImageElement).parentElement?.remove();
+                      }}
+                      onLoad={(e) => {
+                        // Drop the box entirely if the image is tiny —
+                        // a 64x64 bug-icon glyph isn't worth the slot.
+                        const im = e.target as HTMLImageElement;
+                        if (im.naturalWidth < 200 || im.naturalHeight < 100) {
+                          im.parentElement?.remove();
+                        }
                       }}
                     />
                   </div>
@@ -861,18 +890,17 @@ export default function FeedPage() {
 function HeroIllustration({ paper }: { paper: Paper }) {
   if (paper.hero_image_url) {
     return (
-      <div className="w-full aspect-[16/8] overflow-hidden bg-bg-primary relative">
+      <div className="w-full overflow-hidden bg-bg-primary relative max-h-[360px]">
         <img
           src={paper.hero_image_url}
           alt=""
-          className="w-full h-full object-cover"
+          className="w-full max-h-[360px] object-contain"
           loading="eager"
           referrerPolicy="no-referrer"
           onError={(e) => {
             (e.target as HTMLImageElement).style.display = "none";
           }}
         />
-        {/* Subtle bottom fade so card text reads cleanly below */}
         <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-bg-card to-transparent pointer-events-none" />
       </div>
     );
