@@ -162,6 +162,7 @@ export default function FeedPage() {
   const [burstPaperId, setBurstPaperId] = useState<string | null>(null);
   const [newSinceLast, setNewSinceLast] = useState<number>(0);
   const [authorSeeds, setAuthorSeeds] = useState<string[]>([]);
+  const [dogEaredIDs, setDogEaredIDs] = useState<Set<string>>(new Set());
   const [whyPaper, setWhyPaper] = useState<Paper | null>(null);
   const [focusedIdx, setFocusedIdx] = useState<number>(-1);
   const [todayBriefing, setTodayBriefing] = useState<Briefing | null>(null);
@@ -213,6 +214,34 @@ export default function FeedPage() {
     setTimeout(() => setFlash(null), 2000);
   }
 
+  // Dog-ear toggle — "come back to this in a minute" intent. Lighter
+  // than ★ Pin (which is a long-term Library save). Surfaces in the
+  // /reading deck for a swipeable session-queue.
+  async function toggleDogEar(p: Paper) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const isOn = dogEaredIDs.has(p.id);
+    if (isOn) {
+      await supabase.from("dog_ears").delete()
+        .eq("user_id", user.id).eq("paper_id", p.id);
+      setDogEaredIDs((s) => { const n = new Set(s); n.delete(p.id); return n; });
+      setFlash("Unfolded — removed from Reading");
+    } else {
+      const { error } = await supabase.from("dog_ears").upsert(
+        { user_id: user.id, paper_id: p.id },
+        { onConflict: "user_id,paper_id" },
+      );
+      if (error) {
+        setFlash(`Error: ${error.message}`);
+      } else {
+        setDogEaredIDs((s) => new Set(s).add(p.id));
+        setFlash("Folded — find in Reading");
+        if (navigator.vibrate) navigator.vibrate(8);
+      }
+    }
+    setTimeout(() => setFlash(null), 1800);
+  }
+
   function startLongPress(p: Paper) {
     longPressed.current = false;
     longPressTimer.current = window.setTimeout(() => {
@@ -241,7 +270,7 @@ export default function FeedPage() {
       .toISOString().slice(0, 10);
     // Ping the visit RPC alongside the data fetch so streak + new-since
     // counts are always fresh on Feed open.
-    const [{ data: rows, error: err1 }, { data: pins }, { data: dismisses }, visit, { data: seedRows }, { data: brief }, { data: recentBriefings }] = await Promise.all([
+    const [{ data: rows, error: err1 }, { data: pins }, { data: dogEars }, { data: dismisses }, visit, { data: seedRows }, { data: brief }, { data: recentBriefings }] = await Promise.all([
       supabase
         .from("papers")
         .select("*", { count: "exact" })
@@ -249,6 +278,8 @@ export default function FeedPage() {
         .order("relevance_score", { ascending: false })
         .limit(60),
       supabase.from("pins").select("paper_id"),
+      // Dog-ears = "circle back this session" (lighter than pin).
+      supabase.from("dog_ears").select("paper_id"),
       // Dismissed papers should be excluded entirely.
       supabase.from("dismissals").select("paper_id"),
       supabase.rpc("ping_visit"),
@@ -416,6 +447,7 @@ export default function FeedPage() {
 
     setPapers(ranked);
     setPinnedIDs(new Set((pins || []).map((p: any) => p.paper_id)));
+    setDogEaredIDs(new Set((dogEars || []).map((d: any) => d.paper_id)));
     setLoading(false);
   }
 
@@ -635,8 +667,13 @@ export default function FeedPage() {
             onMouseUp={cancelLongPress}
             onMouseLeave={cancelLongPress}
             onContextMenu={(e) => { e.preventDefault(); pinForLater(p); }}
-            className="block bg-bg-card rounded-card overflow-hidden mb-3 active:opacity-80 transition cursor-pointer select-none shadow-sm"
+            className="relative block bg-bg-card rounded-card overflow-hidden mb-3 active:opacity-80 transition cursor-pointer select-none shadow-sm"
           >
+            <DogEarToggle
+              size={36}
+              on={dogEaredIDs.has(p.id)}
+              onClick={() => toggleDogEar(p)}
+            />
             <HeroIllustration paper={p} />
             <div className="p-5">
               <div className="flex items-center justify-between gap-3 mb-2">
@@ -781,12 +818,16 @@ export default function FeedPage() {
                 onMouseUp={cancelLongPress}
                 onMouseLeave={cancelLongPress}
                 onContextMenu={(e) => { e.preventDefault(); pinForLater(p); }}
-                className={`block bg-bg-card rounded-card overflow-hidden active:opacity-80 transition cursor-pointer select-none ${accentClass} ${
+                className={`relative block bg-bg-card rounded-card overflow-hidden active:opacity-80 transition cursor-pointer select-none ${accentClass} ${
                   papers[focusedIdx]?.id === p.id
                     ? "ring-2 ring-jewel-emerald ring-offset-2 ring-offset-bg-primary"
                     : ""
                 }`}
               >
+                <DogEarToggle
+                  on={dogEaredIDs.has(p.id)}
+                  onClick={() => toggleDogEar(p)}
+                />
                 <div className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <span className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider line-clamp-1">
@@ -1124,6 +1165,68 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
       </div>
       <div className="text-sm">{children}</div>
     </div>
+  );
+}
+
+// Folded-corner control. Lives in the top-right of each feed card.
+// Inactive: subtle outline triangle, hover-darkens. Active: a real-
+// looking folded paper corner — filled in topaz so the eye picks it
+// out from across the page. Click toggles. e.stopPropagation prevents
+// the underlying card-click from firing.
+function DogEarToggle({
+  on, onClick, size = 28,
+}: { on: boolean; onClick: () => void; size?: number }) {
+  const fillActive = "#B89039";   // jewel-topaz
+  const fillIdle = "#F4EDDD";     // bg-card (matches surface)
+  const fillUnder = "#E0D5BA";    // slightly darker for the "page beneath"
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      aria-label={on ? "Unfold (remove from Reading)" : "Fold to read later"}
+      title={on ? "Unfold" : "Fold to read later"}
+      className="absolute top-0 right-0 group"
+      style={{ width: size, height: size }}
+    >
+      <svg
+        width={size} height={size} viewBox="0 0 28 28"
+        className="transition-transform group-hover:scale-110"
+        style={{ overflow: "visible" }}
+      >
+        {/* The "underneath page" — visible only when folded. Subtle
+            so the corner has perceived depth. */}
+        {on && (
+          <polygon
+            points="0,0 28,0 0,28"
+            fill={fillUnder}
+            opacity="0.55"
+          />
+        )}
+        {/* The fold itself — when on, it's a flipped triangular flap
+            with shadow giving it depth. When off, just an outline hint. */}
+        {on ? (
+          <g>
+            <polygon
+              points="28,0 28,14 14,0"
+              fill={fillActive}
+              stroke="#8C6B22" strokeWidth="0.6"
+            />
+            <line x1="28" y1="14" x2="14" y2="0"
+              stroke="#8C6B22" strokeOpacity="0.55" strokeWidth="0.8" />
+          </g>
+        ) : (
+          <g className="opacity-40 group-hover:opacity-90 transition-opacity">
+            <polygon
+              points="28,0 28,12 16,0"
+              fill={fillIdle}
+              stroke="#7D7266" strokeWidth="0.6"
+              strokeDasharray="2 1.5"
+            />
+          </g>
+        )}
+      </svg>
+    </button>
   );
 }
 

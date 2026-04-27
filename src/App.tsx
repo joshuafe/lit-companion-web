@@ -16,6 +16,7 @@ import OnboardingPage from "./pages/OnboardingPage";
 import ConstellationPage from "./pages/ConstellationPage";
 import AddPaperPage from "./pages/AddPaperPage";
 import TocPage from "./pages/TocPage";
+import ReadingPage from "./pages/ReadingPage";
 import SearchModal from "./components/SearchModal";
 
 export default function App() {
@@ -105,6 +106,7 @@ export default function App() {
             {/* /latest retired — TOC covers the same need with more value. */}
             <Route path="/latest" element={<Navigate to="/toc" replace />} />
             <Route path="/toc" element={<TocPage />} />
+            <Route path="/reading" element={<ReadingPage />} />
             <Route path="/constellation" element={<ConstellationPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/settings/seeds" element={<SeedsPage />} />
@@ -125,6 +127,7 @@ const NAV_ITEMS = [
   { to: "/", label: "Feed", icon: "📰", match: (p: string) => p === "/" || p.startsWith("/paper") },
   { to: "/toc", label: "Journals", icon: "📑", match: (p: string) => p.startsWith("/toc") },
   { to: "/briefing", label: "Briefing", icon: "🎧", match: (p: string) => p.startsWith("/briefing") },
+  { to: "/reading", label: "Reading", icon: "📖", match: (p: string) => p.startsWith("/reading") },
   { to: "/library", label: "Library", icon: "★", match: (p: string) => p.startsWith("/library") },
   { to: "/settings", label: "Settings", icon: "⚙︎", match: (p: string) => p.startsWith("/settings") },
 ];
