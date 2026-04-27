@@ -218,7 +218,7 @@ export default function FeedPage() {
       .toISOString().slice(0, 10);
     // Ping the visit RPC alongside the data fetch so streak + new-since
     // counts are always fresh on Feed open.
-    const [{ data: rows, error: err1 }, { data: pins }, visit, { data: seedRows }, { data: brief }] = await Promise.all([
+    const [{ data: rows, error: err1 }, { data: pins }, { data: dismisses }, visit, { data: seedRows }, { data: brief }, { data: recentBriefings }] = await Promise.all([
       supabase
         .from("papers")
         .select("*", { count: "exact" })
@@ -226,6 +226,8 @@ export default function FeedPage() {
         .order("relevance_score", { ascending: false })
         .limit(60),
       supabase.from("pins").select("paper_id"),
+      // Dismissed papers should be excluded entirely.
+      supabase.from("dismissals").select("paper_id"),
       supabase.rpc("ping_visit"),
       supabase.from("topic_seeds").select("value").eq("kind", "author"),
       supabase
@@ -234,6 +236,14 @@ export default function FeedPage() {
         .order("briefing_date", { ascending: false })
         .limit(1)
         .maybeSingle(),
+      // Past 7 days of briefings — papers already in any of these get
+      // demoted in the sort so they don't keep camping the top.
+      supabase
+        .from("briefings")
+        .select("paper_ids")
+        .gte("briefing_date", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
+        .order("briefing_date", { ascending: false })
+        .limit(7),
     ]);
     setTodayBriefing((brief as Briefing | null) || null);
 
@@ -280,15 +290,42 @@ export default function FeedPage() {
         .map((p) => p.doi)
         .filter((d): d is string => !!d),
     );
+    // Build the demotion sets. Source IDs (which `papers.id` matches when
+    // pins/dismissals reference it) come straight off the join columns.
+    const dismissedSet = new Set(
+      ((dismisses as { paper_id: string }[]) || []).map((d) => d.paper_id),
+    );
+    const pinnedSet = new Set(
+      ((pins as { paper_id: string }[]) || []).map((p) => p.paper_id),
+    );
+    // briefings.paper_ids stores source_id (PMID etc.), not the papers.id
+    // UUID — so we match against paper.source_id when sorting.
+    const briefedSourceIds = new Set<string>();
+    for (const b of (recentBriefings as { paper_ids: string[] | null }[]) || []) {
+      for (const sid of (b.paper_ids || [])) briefedSourceIds.add(String(sid));
+    }
+    // 0 = fresh & unseen, 1 = already in a recent briefing,
+    // 2 = already pinned (user has it; show but bury).
+    const seenWeight = (p: Paper): number => {
+      if (pinnedSet.has(p.id)) return 2;
+      if (briefedSourceIds.has(String(p.source_id))) return 1;
+      return 0;
+    };
     const ranked = ((rows as Paper[]) || [])
       .filter((p) => !isJunk(p.title))
+      .filter((p) => !dismissedSet.has(p.id))
       .filter((p) => {
-        // If this paper is a preprint and its published_doi exists in
-        // the feed, hide the preprint.
+        // Preprint dedup: hide preprint when its published twin is here.
         if (p.published_doi && allDois.has(p.published_doi)) return false;
         return true;
       })
       .sort((a, b) => {
+        // Already-seen demotion first — pinned/briefed sink to the
+        // bottom regardless of recency, otherwise the same handful of
+        // top-relevance papers camp the top of the feed for days.
+        const sa = seenWeight(a);
+        const sb = seenWeight(b);
+        if (sa !== sb) return sa - sb;
         const da = daysOld(a);
         const db = daysOld(b);
         if (da !== db) return da - db;
