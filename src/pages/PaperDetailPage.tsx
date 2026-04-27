@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import type { Paper } from "../lib/types";
+import { stripHtml } from "../lib/text";
 
 export default function PaperDetailPage() {
   const { id } = useParams();
@@ -342,7 +343,7 @@ export default function PaperDetailPage() {
         <VersionTag paper={paper} />
       </div>
       <h1 className="mt-2 text-[22px] font-semibold leading-snug text-text-primary">
-        {paper.title}
+        {stripHtml(paper.title)}
       </h1>
       <div className="mt-1 text-caption text-text-secondary">
         {(paper.authors || []).slice(0, 8).join(", ")}

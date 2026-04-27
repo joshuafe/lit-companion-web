@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { supabase, SUPABASE_URL } from "../lib/supabase";
+import { stripHtml } from "../lib/text";
 
 interface Paper {
   id: string;
@@ -304,7 +305,7 @@ function TopPapers({ papers }: { papers: Paper[] }) {
                     {Math.round(score * 100)}
                   </span>
                   <span className="text-[12px] text-text-primary truncate">
-                    {p.title}
+                    {stripHtml(p.title)}
                   </span>
                 </div>
               </div>
@@ -347,37 +348,60 @@ function JournalTable({ rows }: { rows: JournalRow[] }) {
 
 function RecencyScatter({ points }: { points: Detail["recency"] }) {
   if (!points.length) return <div className="text-caption text-text-secondary">No timestamped papers.</div>;
-  const maxDays = Math.max(...points.map((p) => p.days), 30);
+  // Bound the X-axis at the feed window. Some rows have published_at = null
+  // server-side, which the edge fn turns into "days = 20570" (epoch).
+  // Drop those + cap so a few outliers don't compress everything else
+  // into a single column.
+  const HARD_CAP = 90;
+  const inRange = points.filter((p) => p.days >= 0 && p.days <= HARD_CAP);
+  const dropped = points.length - inRange.length;
+  if (inRange.length === 0) {
+    return (
+      <div className="text-caption text-text-secondary">
+        All {points.length} papers fall outside the 90-day window — likely
+        missing publication dates. Pipeline should be filling these from
+        PubMed metadata; check the user's most recent ingest run.
+      </div>
+    );
+  }
+  const maxDays = Math.max(...inRange.map((p) => p.days), 30);
   const W = 400, H = 160, PAD = 20;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-44">
-      {/* grid */}
-      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="#2E2A24" strokeOpacity="0.2" />
-      <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="#2E2A24" strokeOpacity="0.2" />
-      {[0.5, 1].map((g, i) => (
-        <line
-          key={i}
-          x1={PAD}
-          y1={H - PAD - g * (H - 2 * PAD)}
-          x2={W - PAD}
-          y2={H - PAD - g * (H - 2 * PAD)}
-          stroke="#2E2A24"
-          strokeOpacity="0.08"
-        />
-      ))}
-      {points.map((p, i) => {
-        const x = PAD + (1 - p.days / maxDays) * (W - 2 * PAD);
-        const y = H - PAD - p.score * (H - 2 * PAD);
-        const fill = p.pinned ? "#D9A54C" : p.in_briefing ? "#7B9A76" : "#B86E4C";
-        const opacity = p.in_briefing || p.pinned ? 0.95 : 0.55;
-        const r = p.pinned ? 4 : 3;
-        return <circle key={i} cx={x} cy={y} r={r} fill={fill} opacity={opacity} />;
-      })}
-      <text x={PAD} y={H - 4} fontSize="9" fill="#7D7266">{maxDays}d ago</text>
-      <text x={W - PAD - 14} y={H - 4} fontSize="9" fill="#7D7266">now</text>
-      <text x={4} y={PAD + 4} fontSize="9" fill="#7D7266">1.0</text>
-      <text x={4} y={H - PAD + 3} fontSize="9" fill="#7D7266">0.0</text>
-    </svg>
+    <>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-44">
+        <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="#2E2A24" strokeOpacity="0.2" />
+        <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="#2E2A24" strokeOpacity="0.2" />
+        {[0.5, 1].map((g, i) => (
+          <line
+            key={i}
+            x1={PAD}
+            y1={H - PAD - g * (H - 2 * PAD)}
+            x2={W - PAD}
+            y2={H - PAD - g * (H - 2 * PAD)}
+            stroke="#2E2A24"
+            strokeOpacity="0.08"
+          />
+        ))}
+        {inRange.map((p, i) => {
+          const x = PAD + (1 - p.days / maxDays) * (W - 2 * PAD);
+          const y = H - PAD - p.score * (H - 2 * PAD);
+          const fill = p.pinned ? "#D9A54C" : p.in_briefing ? "#7B9A76" : "#B86E4C";
+          const opacity = p.in_briefing || p.pinned ? 0.95 : 0.55;
+          const r = p.pinned ? 4 : 3;
+          return <circle key={i} cx={x} cy={y} r={r} fill={fill} opacity={opacity} />;
+        })}
+        <text x={PAD} y={H - 4} fontSize="9" fill="#7D7266">{maxDays}d ago</text>
+        <text x={W - PAD - 14} y={H - 4} fontSize="9" fill="#7D7266">now</text>
+        <text x={4} y={PAD + 4} fontSize="9" fill="#7D7266">1.0</text>
+        <text x={4} y={H - PAD + 3} fontSize="9" fill="#7D7266">0.0</text>
+      </svg>
+      {dropped > 0 && (
+        <div className="text-caption text-text-secondary/60 mt-1">
+          {dropped} paper{dropped === 1 ? "" : "s"} hidden — published_at out
+          of range or missing.
+        </div>
+      )}
+    </>
   );
 }
 
@@ -402,7 +426,7 @@ function BriefingTimeline({ briefings, papers }: { briefings: Briefing[]; papers
               const p = paperById[pid];
               return (
                 <li key={pid} className="text-[12px] text-text-primary truncate">
-                  {p ? `${Math.round((p.relevance_score ?? 0) * 100)} · ${p.title}` : pid.slice(0, 8)}
+                  {p ? `${Math.round((p.relevance_score ?? 0) * 100)} · ${stripHtml(p.title)}` : pid.slice(0, 8)}
                 </li>
               );
             })}

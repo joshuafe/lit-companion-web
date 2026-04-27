@@ -492,19 +492,33 @@ function MetricsChart({ metrics }: { metrics: MetricSample[] }) {
   const memPath = metrics.map((m, i) =>
     `${i === 0 ? "M" : "L"}${x(m.ts).toFixed(1)},${yMem(m.mem).toFixed(1)}`,
   ).join(" ");
-  // Hour markers across the 24h window.
-  const ticks: { x: number; label: string }[] = [];
+  // Hour markers across the 24h window — every 2h with a label, every
+  // 1h with just a tick mark for visual rhythm. Day-changes get a date
+  // label so a chart spanning midnight reads as such.
+  interface Tick { x: number; label: string; major: boolean; isDayChange: boolean; }
+  const ticks: Tick[] = [];
   const startDate = new Date(tMin);
   startDate.setMinutes(0, 0, 0);
-  for (let h = 0; h <= 24; h += 4) {
+  let prevDay = "";
+  for (let h = 0; h <= 25; h += 1) {
     const t = startDate.getTime() + h * 3600 * 1000;
     if (t < tMin || t > tMax) continue;
     const d = new Date(t);
-    ticks.push({
-      x: x(t),
-      label: d.toLocaleTimeString("en-US", { hour: "numeric", hour12: true }),
-    });
+    const dayKey = d.toDateString();
+    const isDayChange = dayKey !== prevDay && prevDay !== "";
+    prevDay = dayKey;
+    const major = (d.getHours() % 2 === 0) || isDayChange;
+    let label = "";
+    if (isDayChange) {
+      label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    } else if (major) {
+      label = d.toLocaleTimeString("en-US", { hour: "numeric", hour12: true });
+    }
+    ticks.push({ x: x(t), label, major, isDayChange });
   }
+  // "Now" cursor — a vertical guide at right edge so user sees how
+  // recent the chart actually is.
+  const nowX = x(Math.min(Date.now(), tMax));
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block">
@@ -525,16 +539,40 @@ function MetricsChart({ metrics }: { metrics: MetricSample[] }) {
       <path d={cpuPath} fill="none" stroke="#3F6E55" strokeWidth={1.6} />
       {/* Memory line (different scale, thinner so it reads as an overlay) */}
       <path d={memPath} fill="none" stroke="#A8853A" strokeWidth={1.4} strokeDasharray="3 2" />
-      {/* X-axis labels */}
-      {ticks.map((t) => (
-        <text
-          key={t.x}
-          x={t.x} y={H - 4}
-          textAnchor="middle" fontSize="9" fill="#2E2A24" fillOpacity={0.55}
-        >
-          {t.label}
-        </text>
+      {/* X-axis tick marks — minor every hour, major every 2h with label */}
+      {ticks.map((t, i) => (
+        <g key={i}>
+          <line
+            x1={t.x} x2={t.x}
+            y1={pad.t + innerH} y2={pad.t + innerH + (t.major ? 5 : 2.5)}
+            stroke="#2E2A24"
+            strokeOpacity={t.isDayChange ? 0.4 : t.major ? 0.25 : 0.12}
+          />
+          {t.label && (
+            <text
+              x={t.x} y={H - 4}
+              textAnchor="middle"
+              fontSize={t.isDayChange ? 8.5 : 8}
+              fill="#2E2A24"
+              fillOpacity={t.isDayChange ? 0.7 : 0.55}
+              fontWeight={t.isDayChange ? 600 : 400}
+            >
+              {t.label}
+            </text>
+          )}
+        </g>
       ))}
+      {/* "Now" indicator — dotted vertical line + tiny dot */}
+      {nowX >= pad.l && (
+        <g>
+          <line
+            x1={nowX} x2={nowX}
+            y1={pad.t} y2={pad.t + innerH}
+            stroke="#3F6E55" strokeOpacity={0.35} strokeWidth={1} strokeDasharray="2 3"
+          />
+          <circle cx={nowX} cy={pad.t} r={2} fill="#3F6E55" />
+        </g>
+      )}
       {/* Y-axis labels — CPU on the left */}
       <text x={pad.l - 4} y={pad.t + 4} textAnchor="end" fontSize="9" fill="#3F6E55">
         {Math.round(cpuMax)}%
