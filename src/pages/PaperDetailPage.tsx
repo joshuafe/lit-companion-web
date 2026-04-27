@@ -244,19 +244,43 @@ export default function PaperDetailPage() {
   async function sharePaper() {
     if (!paper) return;
     const target = paper.url || (paper.doi ? `https://doi.org/${paper.doi}` : "");
-    const blurb = paper.summary?.tldr || paper.title;
-    const text = `${paper.title}\n\n${blurb}`;
+    // Build a richer share body that survives plain-text channels (Mail,
+    // Slack, iMessage). Title → byline + institution → one-liner →
+    // publisher link → service footer with the alpha invite line.
+    const authors = (paper.authors || []).slice(0, 4).join(", ") +
+      ((paper.authors?.length || 0) > 4 ? ", et al." : "");
+    const inst = paper.last_author_institution || paper.first_author_institution || "";
+    const oneLiner = paper.summary?.key_claim ||
+      paper.summary?.tldr ||
+      (paper.abstract ? paper.abstract.slice(0, 240) + "…" : "");
+    const lines: string[] = [paper.title];
+    if (authors) lines.push("");
+    if (authors) lines.push(authors + (inst ? ` · ${inst}` : ""));
+    if (paper.journal) lines.push(paper.journal);
+    if (oneLiner) {
+      lines.push("");
+      lines.push(oneLiner);
+    }
+    if (target) {
+      lines.push("");
+      lines.push(`Read it: ${target}`);
+    }
+    lines.push("");
+    lines.push("—");
+    lines.push("Sent from Literature Companion — a research feed that reads PubMed and renders an audio briefing each morning.");
+    lines.push("Currently in alpha. Request a token at https://lit-companion-web.vercel.app");
+    const text = lines.join("\n");
+
     if (navigator.share) {
       try {
         await navigator.share({ title: paper.title, text, url: target });
         return;
       } catch (e: any) {
-        if (e?.name === "AbortError") return; // user cancelled
-        // fall through to copy fallback
+        if (e?.name === "AbortError") return;
       }
     }
     try {
-      await navigator.clipboard.writeText(`${text}\n${target}`);
+      await navigator.clipboard.writeText(text);
       setFlash("✓ Copied — paste anywhere");
     } catch {
       setFlash("Couldn't share or copy.");

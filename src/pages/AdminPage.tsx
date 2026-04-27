@@ -45,6 +45,14 @@ interface Row {
 
 interface AuthorRank { name: string; user_count: number; }
 interface JournalRank { name: string; pins: number; user_count: number; }
+interface WaitlistEntry {
+  id: string;
+  email: string;
+  created_at: string;
+  source: string;
+  notes: string | null;
+  invited_at: string | null;
+}
 interface MetricSample {
   ts: number;
   cpu: number;
@@ -86,6 +94,7 @@ export default function AdminPage() {
   const [topAuthors, setTopAuthors] = useState<AuthorRank[]>([]);
   const [topJournals, setTopJournals] = useState<JournalRank[]>([]);
   const [metrics, setMetrics] = useState<MetricSample[]>([]);
+  const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("last_action");
@@ -117,6 +126,7 @@ export default function AdminPage() {
       setTopAuthors(data.top_authors || []);
       setTopJournals(data.top_journals || []);
       setMetrics(data.metrics || []);
+      setWaitlist(data.waitlist || []);
     } catch (e: any) {
       setError(e.message);
     }
@@ -226,6 +236,59 @@ export default function AdminPage() {
             />
           </div>
         </>
+      )}
+
+      {waitlist.length > 0 && (
+        <div className="bg-bg-card rounded-2xl p-4 mb-3 border border-jewel-topaz/20">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="text-eyebrow font-semibold text-jewel-topaz uppercase tracking-wider">
+                Token waitlist
+              </div>
+              <div className="text-caption text-text-secondary/70 mt-0.5">
+                {waitlist.filter((w) => !w.invited_at).length} pending ·{" "}
+                {waitlist.filter((w) => w.invited_at).length} already invited ·
+                ordered oldest first
+              </div>
+            </div>
+          </div>
+          <ol className="space-y-1.5">
+            {waitlist.map((w, i) => (
+              <li
+                key={w.id}
+                className={`flex items-start gap-3 text-sm py-1.5 ${
+                  w.invited_at ? "opacity-50" : ""
+                }`}
+              >
+                <span className="font-mono text-text-secondary/60 w-6 shrink-0 text-right">
+                  {i + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-text-primary font-medium truncate">
+                      {w.email}
+                    </span>
+                    {w.invited_at && (
+                      <span className="text-[10px] text-jewel-emerald font-semibold uppercase tracking-wider shrink-0">
+                        ✓ invited
+                      </span>
+                    )}
+                    <span className="text-[10px] text-text-secondary/60 font-mono ml-auto shrink-0">
+                      {new Date(w.created_at).toLocaleDateString("en-US", {
+                        month: "short", day: "numeric",
+                      })}
+                    </span>
+                  </div>
+                  {w.notes && (
+                    <div className="mt-0.5 text-caption text-text-secondary line-clamp-2 font-serif">
+                      {w.notes}
+                    </div>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
       )}
 
       {metrics.length > 0 && (

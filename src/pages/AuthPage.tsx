@@ -11,6 +11,36 @@ export default function AuthPage() {
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Waitlist form state — separate from sign-in to avoid sharing one
+  // email field with two semantically different actions.
+  const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [waitlistNotes, setWaitlistNotes] = useState("");
+  const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
+  const [waitlistDone, setWaitlistDone] = useState(false);
+  const [waitlistError, setWaitlistError] = useState<string | null>(null);
+
+  async function joinWaitlist(e: React.FormEvent) {
+    e.preventDefault();
+    if (!waitlistEmail.trim()) return;
+    setWaitlistSubmitting(true);
+    setWaitlistError(null);
+    const { error } = await supabase.from("waitlist").insert({
+      email: waitlistEmail.trim().toLowerCase(),
+      notes: waitlistNotes.trim() || null,
+      source: "landing",
+    });
+    setWaitlistSubmitting(false);
+    if (error) {
+      // Friendlier copy for the unique-violation case (already on list).
+      if (error.code === "23505" || /duplicate/i.test(error.message)) {
+        setWaitlistDone(true);
+        return;
+      }
+      setWaitlistError(error.message);
+      return;
+    }
+    setWaitlistDone(true);
+  }
 
   async function redeemInvite(email: string, code: string): Promise<string | null> {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/redeem-invite`, {
@@ -121,10 +151,10 @@ export default function AuthPage() {
 
           <div className="mt-8 flex flex-wrap gap-3 items-center">
             <button
-              onClick={scrollToAuth}
+              onClick={() => document.getElementById("waitlist")?.scrollIntoView({ behavior: "smooth", block: "center" })}
               className="rounded-full bg-jewel-emerald text-white font-semibold px-6 py-3 text-base shadow-sm active:opacity-80 hover:shadow-md transition"
             >
-              Get alpha access →
+              Request a token →
             </button>
             <button
               onClick={() => { setMode("password"); scrollToAuth(); }}
@@ -362,6 +392,64 @@ export default function AuthPage() {
           )}
 
           {error && <div className="mt-4 text-sm text-red-600">{error}</div>}
+        </div>
+      </section>
+
+      {/* ──────────────── WAITLIST ──────────────── */}
+      <section
+        id="waitlist"
+        className="max-w-5xl mx-auto px-6 py-16 sm:py-20 border-t border-stroke"
+      >
+        <div className="max-w-md mx-auto text-center">
+          <div className="text-eyebrow font-semibold text-jewel-topaz uppercase tracking-wider mb-2">
+            Alpha — invite only
+          </div>
+          <h2 className="font-serif text-[28px] font-semibold leading-tight mb-3">
+            Request a token
+          </h2>
+          <p className="font-serif text-[15px] text-text-secondary mb-6 leading-relaxed">
+            Drop your email and we'll send a code as we onboard the next
+            cohort. Tell us what you research — it helps us prioritize.
+          </p>
+          {waitlistDone ? (
+            <div className="bg-jewel-emerald/10 border border-jewel-emerald/30 rounded-2xl p-5 text-left">
+              <div className="text-jewel-emerald font-semibold mb-1">✓ You're on the list.</div>
+              <p className="text-caption text-text-secondary">
+                We'll email <strong>{waitlistEmail || "you"}</strong> when
+                we have a slot. Usually a few days.
+              </p>
+            </div>
+          ) : (
+            <form onSubmit={joinWaitlist} className="bg-bg-card rounded-2xl p-5 text-left space-y-3 shadow-sm">
+              <input
+                type="email"
+                required
+                inputMode="email"
+                autoComplete="email"
+                placeholder="you@university.edu"
+                value={waitlistEmail}
+                onChange={(e) => setWaitlistEmail(e.target.value)}
+                className="w-full rounded-xl bg-bg-primary px-4 py-3 text-base text-text-primary placeholder:text-text-secondary/60 border border-transparent focus:border-jewel-emerald focus:outline-none"
+              />
+              <textarea
+                placeholder="What do you work on? (optional, helps us prioritize)"
+                value={waitlistNotes}
+                onChange={(e) => setWaitlistNotes(e.target.value)}
+                rows={3}
+                className="w-full rounded-xl bg-bg-primary px-4 py-3 text-base text-text-primary placeholder:text-text-secondary/60 border border-transparent focus:border-jewel-emerald focus:outline-none resize-none font-serif"
+              />
+              <button
+                type="submit"
+                disabled={waitlistSubmitting || !waitlistEmail.trim()}
+                className="w-full rounded-xl bg-jewel-emerald text-white font-semibold py-3 disabled:opacity-50 active:opacity-80"
+              >
+                {waitlistSubmitting ? "Adding…" : "Add me to the waitlist"}
+              </button>
+              {waitlistError && (
+                <div className="text-sm text-red-600">{waitlistError}</div>
+              )}
+            </form>
+          )}
         </div>
       </section>
 
