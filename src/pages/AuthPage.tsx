@@ -505,13 +505,13 @@ function BriefingPreview() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [t, setT] = useState(0);
-  const [duration, setDuration] = useState(130);
+  const [duration, setDuration] = useState(115);
 
   useEffect(() => {
     const a = audioRef.current;
     if (!a) return;
     const onTime = () => setT(a.currentTime);
-    const onMeta = () => setDuration(a.duration || 130);
+    const onMeta = () => setDuration(a.duration || 115);
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     a.addEventListener("timeupdate", onTime);
@@ -531,11 +531,6 @@ function BriefingPreview() {
     if (!a) return;
     if (a.paused) a.play(); else a.pause();
   }
-  function seek(delta: number) {
-    const a = audioRef.current;
-    if (!a) return;
-    a.currentTime = Math.max(0, Math.min(duration, a.currentTime + delta));
-  }
   const fmt = (s: number) => `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}`;
   const pct = duration ? (t / duration) * 100 : 0;
 
@@ -550,22 +545,26 @@ function BriefingPreview() {
           Coordinated T-, B-, and antibody memory: a unified blueprint for vaccines
         </div>
         <audio ref={audioRef} src="/tour-sample.m4a" preload="none" />
+        {/* scrubber with chapter ticks — only the play button is interactive */}
         <div className="relative h-2 bg-bg-primary rounded-full mb-1 overflow-hidden">
           <div
             className="absolute inset-y-0 left-0 bg-jewel-emerald rounded-full transition-[width] duration-200"
             style={{ width: `${pct}%` }}
           />
+          {[10, 28, 37, 55, 72, 88].map((p, i) => (
+            <div
+              key={i}
+              className={`absolute top-1/2 -translate-y-1/2 w-1 h-3 rounded-sm ${i === 2 ? "bg-jewel-topaz" : "bg-text-primary/40"}`}
+              style={{ left: `calc(${p}% - 2px)` }}
+            />
+          ))}
         </div>
         <div className="flex justify-between text-[11px] text-text-secondary font-mono mb-4">
           <span>{fmt(t)}</span><span>{fmt(duration)}</span>
         </div>
-        <div className="flex items-center justify-center gap-5">
-          <button
-            type="button"
-            onClick={() => seek(-15)}
-            className="text-text-primary text-sm font-mono w-12 text-center active:opacity-60"
-            aria-label="Back 15 seconds"
-          >−15</button>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-text-primary text-sm font-mono w-12 text-center">−15</span>
+          <span className="text-text-primary text-xl">⏮</span>
           <button
             type="button"
             onClick={toggle}
@@ -574,16 +573,14 @@ function BriefingPreview() {
           >
             {playing ? "❚❚" : "▶"}
           </button>
-          <button
-            type="button"
-            onClick={() => seek(15)}
-            className="text-text-primary text-sm font-mono w-12 text-center active:opacity-60"
-            aria-label="Forward 15 seconds"
-          >+15</button>
+          <span className="text-text-primary text-xl">⏭</span>
+          <span className="text-text-primary text-sm font-mono w-12 text-center">+15</span>
+          <span className="text-jewel-topaz text-sm font-semibold w-10 text-center">1.5×</span>
         </div>
-        <div className="mt-4 pt-4 border-t border-stroke flex items-center gap-2 text-caption">
-          <span className="text-text-secondary">Excerpt from this morning's briefing</span>
-          <Link to="/tour#listen" className="text-jewel-emerald font-semibold ml-auto">Take the tour →</Link>
+        <div className="mt-4 pt-4 border-t border-stroke flex items-center gap-2">
+          <span className="rounded-full bg-jewel-topaz text-white px-3 py-1 text-xs font-semibold">★ Pin</span>
+          <span className="rounded-full bg-bg-primary text-text-secondary px-3 py-1 text-xs">Skip ↷</span>
+          <Link to="/tour#listen" className="text-caption text-jewel-emerald font-semibold ml-auto">Take the tour →</Link>
         </div>
       </div>
     </div>

@@ -25,6 +25,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null);
+  // Subscribe to router location so unauthenticated /tour navigation
+  // re-renders App and bypasses the auth gate via the check below.
+  const location = useLocation();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -75,7 +78,7 @@ export default function App() {
   }
 
   // Public /tour — bypasses auth gate so it can be linked / shared.
-  if (window.location.pathname === "/tour") return <TourPage />;
+  if (location.pathname === "/tour") return <TourPage />;
 
   if (!session) return <AuthPage />;
 
