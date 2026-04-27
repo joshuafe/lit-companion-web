@@ -542,7 +542,7 @@ function BriefingPreview() {
           Now playing — sample
         </div>
         <div className="font-serif text-[15px] leading-snug font-semibold mb-4 line-clamp-2">
-          Coordinated T-, B-, and antibody memory: a unified blueprint for vaccines
+          A 96-mutation plasma cfDNA assay for tracking AML after transplant
         </div>
         <audio ref={audioRef} src="/tour-sample.m4a" preload="none" />
         {/* scrubber with chapter ticks — only the play button is interactive */}
