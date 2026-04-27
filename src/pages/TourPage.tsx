@@ -145,9 +145,10 @@ function ListenSection() {
               "C-D-four-plus" stumbles).
             </p>
             <p className="font-serif text-[14px] text-text-secondary leading-relaxed">
-              The clip below is the first paper-block from this morning's
-              digest — a review on tissue-resident memory T cells from{" "}
-              <em>Immunity</em>. ~2 minutes; turn the volume up.
+              The clip below is one paper-block from this morning's digest — a
+              synthesis from <em>Immunity</em> arguing that vaccine design has
+              to optimize T-cell, B-cell, and antibody memory in concert,
+              not one at a time. ~90 seconds; turn the volume up.
             </p>
           </div>
 
@@ -159,11 +160,11 @@ function ListenSection() {
                   Now playing — sample
                 </div>
                 <div className="font-serif text-[17px] mt-1 font-semibold leading-snug">
-                  Distinct micro-niches imprint functional specialization on
-                  resident T cells
+                  Coordinated T-, B-, and antibody memory: a unified blueprint
+                  for vaccines
                 </div>
                 <div className="text-caption text-text-secondary mt-1">
-                  Immunity · review · CD8⁺ T-cell biology
+                  Immunity · synthesis · CD8⁺ T-cell biology
                 </div>
               </div>
 
@@ -210,15 +211,12 @@ function ListenSection() {
                   Transcript snippet
                 </div>
                 <p className="font-serif text-[14px] leading-relaxed text-text-primary/85">
-                  "The review in Immunity pulls together every spatial profiling
-                  tool that's landed on the market — CODEX, MIBI, Visium,
-                  Slide-seq — and shows how they're finally letting researchers
-                  watch tissue-resident memory cells in situ, one pixel at a
-                  time. The authors argue that the exact spot a TRM occupies,
-                  whether it's hugging a blood vessel or tucked next to an
-                  epithelial niche, decides whether it's poised to fire or to
-                  sit quietly. That's a big shift from thinking of TRM as a
-                  homogeneous squad…"
+                  "Crotty's Immunity piece stitches together the three arms of
+                  adaptive immunity — T cells, B cells, antibodies — into a
+                  single blueprint for vaccines. The central claim is that
+                  focusing on any single component, say neutralizing
+                  antibodies, is like trying to win a chess match by moving
+                  only the queen…"
                 </p>
               </div>
             </div>

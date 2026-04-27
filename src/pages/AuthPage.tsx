@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase, SUPABASE_URL } from "../lib/supabase";
 
 type Mode = "magic" | "password";
@@ -501,42 +502,88 @@ function FeedPreview() {
 }
 
 function BriefingPreview() {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [t, setT] = useState(0);
+  const [duration, setDuration] = useState(130);
+
+  useEffect(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    const onTime = () => setT(a.currentTime);
+    const onMeta = () => setDuration(a.duration || 130);
+    const onPlay = () => setPlaying(true);
+    const onPause = () => setPlaying(false);
+    a.addEventListener("timeupdate", onTime);
+    a.addEventListener("loadedmetadata", onMeta);
+    a.addEventListener("play", onPlay);
+    a.addEventListener("pause", onPause);
+    return () => {
+      a.removeEventListener("timeupdate", onTime);
+      a.removeEventListener("loadedmetadata", onMeta);
+      a.removeEventListener("play", onPlay);
+      a.removeEventListener("pause", onPause);
+    };
+  }, []);
+
+  function toggle() {
+    const a = audioRef.current;
+    if (!a) return;
+    if (a.paused) a.play(); else a.pause();
+  }
+  function seek(delta: number) {
+    const a = audioRef.current;
+    if (!a) return;
+    a.currentTime = Math.max(0, Math.min(duration, a.currentTime + delta));
+  }
+  const fmt = (s: number) => `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}`;
+  const pct = duration ? (t / duration) * 100 : 0;
+
   return (
     <div className="relative">
       <div className="absolute -inset-4 bg-gradient-to-br from-jewel-topaz/15 to-jewel-emerald/10 blur-2xl -z-10 rounded-3xl" />
       <div className="bg-bg-card rounded-2xl shadow-xl overflow-hidden border border-stroke p-5">
         <div className="text-eyebrow font-semibold text-jewel-emerald uppercase tracking-wider mb-2">
-          Now playing
+          Now playing — sample
         </div>
         <div className="font-serif text-[15px] leading-snug font-semibold mb-4 line-clamp-2">
-          Single-cell maps reveal a regulatory T-cell axis sustaining HSCT chimerism
+          Coordinated T-, B-, and antibody memory: a unified blueprint for vaccines
         </div>
-        {/* scrubber with chapter ticks */}
-        <div className="relative h-2 bg-bg-primary rounded-full mb-1">
-          <div className="absolute inset-y-0 left-0 bg-jewel-emerald rounded-full" style={{ width: "37%" }} />
-          {[10, 28, 37, 55, 72, 88].map((p, i) => (
-            <div
-              key={i}
-              className={`absolute top-1/2 -translate-y-1/2 w-1 h-3 rounded-sm ${i === 2 ? "bg-jewel-topaz" : "bg-text-primary/40"}`}
-              style={{ left: `calc(${p}% - 2px)` }}
-            />
-          ))}
+        <audio ref={audioRef} src="/tour-sample.m4a" preload="none" />
+        <div className="relative h-2 bg-bg-primary rounded-full mb-1 overflow-hidden">
+          <div
+            className="absolute inset-y-0 left-0 bg-jewel-emerald rounded-full transition-[width] duration-200"
+            style={{ width: `${pct}%` }}
+          />
         </div>
         <div className="flex justify-between text-[11px] text-text-secondary font-mono mb-4">
-          <span>2:58</span><span>8:01</span>
+          <span>{fmt(t)}</span><span>{fmt(duration)}</span>
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-text-primary text-sm font-mono w-12 text-center">−15</span>
-          <span className="text-text-primary text-xl">⏮</span>
-          <span className="w-14 h-14 rounded-full bg-jewel-emerald text-white text-xl flex items-center justify-center shadow-md">▶</span>
-          <span className="text-text-primary text-xl">⏭</span>
-          <span className="text-text-primary text-sm font-mono w-12 text-center">+15</span>
-          <span className="text-jewel-topaz text-sm font-semibold w-10 text-center">1.5×</span>
+        <div className="flex items-center justify-center gap-5">
+          <button
+            type="button"
+            onClick={() => seek(-15)}
+            className="text-text-primary text-sm font-mono w-12 text-center active:opacity-60"
+            aria-label="Back 15 seconds"
+          >−15</button>
+          <button
+            type="button"
+            onClick={toggle}
+            className="w-14 h-14 rounded-full bg-jewel-emerald text-white text-xl flex items-center justify-center shadow-md active:opacity-80"
+            aria-label={playing ? "Pause" : "Play"}
+          >
+            {playing ? "❚❚" : "▶"}
+          </button>
+          <button
+            type="button"
+            onClick={() => seek(15)}
+            className="text-text-primary text-sm font-mono w-12 text-center active:opacity-60"
+            aria-label="Forward 15 seconds"
+          >+15</button>
         </div>
-        <div className="mt-4 pt-4 border-t border-stroke flex items-center gap-2">
-          <span className="rounded-full bg-jewel-topaz text-white px-3 py-1 text-xs font-semibold">★ Pin</span>
-          <span className="rounded-full bg-bg-primary text-text-secondary px-3 py-1 text-xs">Skip ↷</span>
-          <span className="text-caption text-text-secondary ml-auto">Chapter 3 · 6</span>
+        <div className="mt-4 pt-4 border-t border-stroke flex items-center gap-2 text-caption">
+          <span className="text-text-secondary">Excerpt from this morning's briefing</span>
+          <Link to="/tour#listen" className="text-jewel-emerald font-semibold ml-auto">Take the tour →</Link>
         </div>
       </div>
     </div>
