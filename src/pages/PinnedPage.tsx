@@ -300,7 +300,7 @@ export default function PinnedPage() {
           <button
             onClick={() => setTab("dismissed")}
             className={`px-4 py-1.5 rounded-full transition ${
-              tab === "dismissed" ? "bg-jewel-emerald text-white" : "text-text-secondary"
+              tab === "dismissed" ? "bg-jewel-ruby text-white" : "text-text-secondary"
             }`}
           >
             Dismissed {dismissed.length > 0 && <span className="ml-1 opacity-80">{dismissed.length}</span>}

@@ -207,7 +207,7 @@ export default function TocPage() {
         <Link to="/" className="text-jewel-emerald text-sm font-medium">
           ‹ Feed
         </Link>
-        <span className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
+        <span className="text-eyebrow font-semibold text-jewel-sapphire uppercase tracking-wider">
           Live publisher RSS
         </span>
       </div>

@@ -665,6 +665,8 @@ export default function FeedPage() {
         </div>
       </header>
 
+      <FirstVisitTip />
+
       {error && <div className="text-sm text-red-600 mb-4">{error}</div>}
 
       {flash && (
@@ -1246,56 +1248,88 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 // looking folded paper corner — filled in topaz so the eye picks it
 // out from across the page. Click toggles. e.stopPropagation prevents
 // the underlying card-click from firing.
+// Once-per-device hint that surfaces the new gestures. Dismisses on
+// click or after the user dog-ears anything (intent achieved). Stored
+// in localStorage so it doesn't nag.
+function FirstVisitTip() {
+  const [show, setShow] = useState<boolean>(() => {
+    try { return localStorage.getItem("feed.tipDismissed") !== "1"; }
+    catch { return false; }
+  });
+  if (!show) return null;
+  function dismiss() {
+    try { localStorage.setItem("feed.tipDismissed", "1"); } catch { /* ignore */ }
+    setShow(false);
+  }
+  return (
+    <div className="mt-3 mb-4 bg-gradient-to-br from-jewel-sapphire/10 via-jewel-emerald/8 to-transparent border border-jewel-sapphire/25 rounded-card p-3 flex items-start gap-3 text-caption">
+      <div className="flex-1">
+        <div className="font-semibold text-text-primary mb-1">A few gestures worth knowing</div>
+        <ul className="space-y-1 text-text-secondary">
+          <li>• <strong className="text-text-primary">Tap any corner</strong> to fold it for later — find folded cards in <em>Reading</em>.</li>
+          <li>• <strong className="text-text-primary">Swipe left</strong> on a card to dismiss it · <strong className="text-text-primary">swipe right</strong> to ★ Save.</li>
+          <li>• Open any paper to see <em>"Why you're seeing this"</em> at the bottom.</li>
+        </ul>
+      </div>
+      <button
+        onClick={dismiss}
+        className="text-text-secondary/60 hover:text-text-primary text-sm font-medium px-2 py-1"
+        aria-label="Dismiss tip"
+      >
+        Got it
+      </button>
+    </div>
+  );
+}
+
 function DogEarToggle({
-  on, onClick, size = 28,
+  on, onClick, size = 36,
 }: { on: boolean; onClick: () => void; size?: number }) {
   const fillActive = "#B89039";   // jewel-topaz
-  const fillIdle = "#F4EDDD";     // bg-card (matches surface)
-  const fillUnder = "#E0D5BA";    // slightly darker for the "page beneath"
+  const fillIdle = "#E0D5BA";     // visible against bg-card so the
+                                  // affordance is obvious without hover
+  const fillUnder = "#C7BDAE";    // slightly darker for the "page beneath"
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       onMouseDown={(e) => e.stopPropagation()}
       onTouchStart={(e) => e.stopPropagation()}
       aria-label={on ? "Unfold (remove from Reading)" : "Fold to read later"}
-      title={on ? "Unfold" : "Fold to read later"}
-      className="absolute top-0 right-0 group"
+      title={on ? "Unfold — remove from Reading" : "Fold the corner — save for later in Reading"}
+      className="absolute top-0 right-0 group z-10"
       style={{ width: size, height: size }}
     >
       <svg
-        width={size} height={size} viewBox="0 0 28 28"
-        className="transition-transform group-hover:scale-110"
-        style={{ overflow: "visible" }}
+        width={size} height={size} viewBox="0 0 36 36"
+        className="transition-transform group-hover:scale-105 group-active:scale-95"
+        style={{ overflow: "visible", filter: on ? "drop-shadow(-1px 2px 1.5px rgba(140,107,34,0.35))" : "none" }}
       >
-        {/* The "underneath page" — visible only when folded. Subtle
-            so the corner has perceived depth. */}
         {on && (
-          <polygon
-            points="0,0 28,0 0,28"
-            fill={fillUnder}
-            opacity="0.55"
-          />
+          <polygon points="0,0 36,0 0,36" fill={fillUnder} opacity="0.55" />
         )}
-        {/* The fold itself — when on, it's a flipped triangular flap
-            with shadow giving it depth. When off, just an outline hint. */}
         {on ? (
           <g>
             <polygon
-              points="28,0 28,14 14,0"
+              points="36,0 36,18 18,0"
               fill={fillActive}
               stroke="#8C6B22" strokeWidth="0.6"
             />
-            <line x1="28" y1="14" x2="14" y2="0"
+            <line x1="36" y1="18" x2="18" y2="0"
               stroke="#8C6B22" strokeOpacity="0.55" strokeWidth="0.8" />
           </g>
         ) : (
-          <g className="opacity-40 group-hover:opacity-90 transition-opacity">
+          // Idle state: solid (not dashed) so the affordance reads as
+          // a real corner waiting to be folded. Brighter than before
+          // so users actually notice it. Hover scales + tints toward
+          // active to telegraph the folded outcome.
+          <g className="opacity-70 group-hover:opacity-100 transition-opacity">
             <polygon
-              points="28,0 28,12 16,0"
+              points="36,0 36,16 20,0"
               fill={fillIdle}
               stroke="#7D7266" strokeWidth="0.6"
-              strokeDasharray="2 1.5"
             />
+            <line x1="36" y1="16" x2="20" y2="0"
+              stroke="#7D7266" strokeOpacity="0.5" strokeWidth="0.6" />
           </g>
         )}
       </svg>
