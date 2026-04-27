@@ -166,6 +166,10 @@ export default function FeedPage() {
   const [focusedIdx, setFocusedIdx] = useState<number>(-1);
   const [todayBriefing, setTodayBriefing] = useState<Briefing | null>(null);
   const [profileSignedUpAt, setProfileSignedUpAt] = useState<string | null>(null);
+  const [hideSeen, setHideSeen] = useState<boolean>(() => {
+    // Persist toggle across sessions — feels broken when it resets every reload.
+    return localStorage.getItem("feed.hideSeen") === "1";
+  });
   const longPressTimer = useRef<number | null>(null);
   const longPressed = useRef(false);
   const navigate = useNavigate();
@@ -304,28 +308,27 @@ export default function FeedPage() {
     for (const b of (recentBriefings as { paper_ids: string[] | null }[]) || []) {
       for (const sid of (b.paper_ids || [])) briefedSourceIds.add(String(sid));
     }
-    // 0 = fresh & unseen, 1 = already in a recent briefing,
-    // 2 = already pinned (user has it; show but bury).
-    const seenWeight = (p: Paper): number => {
-      if (pinnedSet.has(p.id)) return 2;
-      if (briefedSourceIds.has(String(p.source_id))) return 1;
-      return 0;
-    };
+    // Pinned papers are now hidden from the feed entirely (they live in
+    // /library). Briefed papers are demoted by default and hidden when
+    // the user toggles "Hide already seen".
+    const isBriefed = (p: Paper) => briefedSourceIds.has(String(p.source_id));
     const ranked = ((rows as Paper[]) || [])
       .filter((p) => !isJunk(p.title))
       .filter((p) => !dismissedSet.has(p.id))
+      .filter((p) => !pinnedSet.has(p.id))
+      .filter((p) => !(hideSeen && isBriefed(p)))
       .filter((p) => {
         // Preprint dedup: hide preprint when its published twin is here.
         if (p.published_doi && allDois.has(p.published_doi)) return false;
         return true;
       })
       .sort((a, b) => {
-        // Already-seen demotion first — pinned/briefed sink to the
-        // bottom regardless of recency, otherwise the same handful of
-        // top-relevance papers camp the top of the feed for days.
-        const sa = seenWeight(a);
-        const sb = seenWeight(b);
-        if (sa !== sb) return sa - sb;
+        // Briefed papers sink below fresh ones within their day bucket
+        // (they're not hidden unless the toggle is on, but they should
+        // never camp the top once you've already heard them in audio).
+        const ba = isBriefed(a) ? 1 : 0;
+        const bb = isBriefed(b) ? 1 : 0;
+        if (ba !== bb) return ba - bb;
         const da = daysOld(a);
         const db = daysOld(b);
         if (da !== db) return da - db;
@@ -339,6 +342,14 @@ export default function FeedPage() {
   }
 
   useEffect(() => { load(); }, []);
+  // Reload when the user flips the "Hide already seen" toggle so the
+  // briefed-paper filter applies without a manual refresh. Persist the
+  // setting so it sticks across reloads.
+  useEffect(() => {
+    localStorage.setItem("feed.hideSeen", hideSeen ? "1" : "0");
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hideSeen]);
 
   // Auto-poll while the feed is empty so a fresh user doesn't have to
   // hard-refresh once the pipeline lands their first papers. Polls every
@@ -440,6 +451,22 @@ export default function FeedPage() {
             </>
           )}
         </p>
+        <div className="mt-3 flex items-center gap-2 text-[11px]">
+          <button
+            onClick={() => setHideSeen((v) => !v)}
+            className={`px-2.5 py-1 rounded-full font-semibold transition ${
+              hideSeen
+                ? "bg-jewel-emerald text-white"
+                : "bg-bg-card text-text-secondary border border-stroke"
+            }`}
+            title="Pinned papers are always hidden. This also hides anything already in a recent briefing."
+          >
+            {hideSeen ? "✓ Hiding already-seen" : "Hide already seen"}
+          </button>
+          <span className="text-text-secondary/60">
+            Pinned papers are always hidden — find them in Library.
+          </span>
+        </div>
       </header>
 
       {error && <div className="text-sm text-red-600 mb-4">{error}</div>}
