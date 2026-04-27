@@ -53,10 +53,22 @@ export default function BriefingPage() {
         }
       }
       if (b?.paper_ids?.length) {
-        const { data: papers } = await supabase
-          .from("papers").select().in("source_id", b.paper_ids);
+        // PostgREST's .in() URL-serializes badly when source_ids contain
+        // unescaped parens or query-string chars (RSS-pinned papers
+        // store the raw URL as source_id). The previous .in() call was
+        // silently dropping those rows, leaving Pin disabled because
+        // activePaper was null. Fetch each paper individually instead;
+        // 6 round-trips is cheap and bulletproof.
+        const results = await Promise.all(
+          b.paper_ids.map((sid: string) =>
+            supabase.from("papers").select().eq("source_id", sid).maybeSingle(),
+          ),
+        );
         const byId: Record<string, Paper> = {};
-        for (const p of (papers as Paper[]) || []) byId[p.source_id] = p;
+        for (const r of results) {
+          const p = r.data as Paper | null;
+          if (p) byId[p.source_id] = p;
+        }
         setPapersById(byId);
       }
     })();
