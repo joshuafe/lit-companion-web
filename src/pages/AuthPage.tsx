@@ -81,6 +81,21 @@ export default function AuthPage() {
     if (signUp.error) setError(signUp.error.message);
   }
 
+  async function sendPasswordReset() {
+    if (!email.trim()) {
+      setError("Enter your email first.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setLoading(false);
+    if (error) setError(error.message);
+    else setSent(true);
+  }
+
   function signInWithOrcid() {
     const ORCID_BASE = "https://orcid.org";
     const clientId = (import.meta as any).env?.VITE_ORCID_CLIENT_ID;
@@ -352,6 +367,18 @@ export default function AuthPage() {
                     : mode === "magic" ? "Send magic link" : "Sign in / sign up"}
                 </button>
               </form>
+
+              {mode === "password" && (
+                <div className="mt-3 text-center">
+                  <button
+                    type="button"
+                    onClick={sendPasswordReset}
+                    className="text-caption text-text-secondary hover:text-jewel-emerald font-medium"
+                  >
+                    Forgot password / set a password →
+                  </button>
+                </div>
+              )}
 
               <div className="mt-5 flex items-center gap-3">
                 <div className="flex-1 h-px bg-text-secondary/20" />

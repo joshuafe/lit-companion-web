@@ -4,6 +4,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import AuthPage from "./pages/AuthPage";
 import TourPage from "./pages/TourPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import FeedPage from "./pages/FeedPage";
 import PaperDetailPage from "./pages/PaperDetailPage";
 import BriefingPage from "./pages/BriefingPage";
@@ -79,6 +80,11 @@ export default function App() {
 
   // Public /tour — bypasses auth gate so it can be linked / shared.
   if (location.pathname === "/tour") return <TourPage />;
+
+  // Public /reset-password — Supabase recovery email lands here with a
+  // token in the URL hash. Page reads the token via supabase-js and lets
+  // the user set a new password before redirecting to /.
+  if (location.pathname === "/reset-password") return <ResetPasswordPage />;
 
   if (!session) return <AuthPage />;
 
