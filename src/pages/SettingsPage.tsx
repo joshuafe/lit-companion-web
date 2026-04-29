@@ -90,6 +90,8 @@ export default function SettingsPage() {
         </div>
       </Link>
 
+      <TimezoneCard />
+
       <ProxyTemplateCard />
 
       <section className="bg-bg-card rounded-2xl p-4">
@@ -106,6 +108,141 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+function TimezoneCard() {
+  const [value, setValue] = useState<string>("");
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [detected, setDetected] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // Browser-detected IANA TZ — used as default and as the auto-fill
+      // when the profile column is null.
+      const browserTz =
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+      if (cancelled) return;
+      setDetected(browserTz);
+
+      const { data } = await supabase
+        .from("profiles")
+        .select("timezone")
+        .maybeSingle();
+      const stored = (data as any)?.timezone as string | null | undefined;
+      if (cancelled) return;
+      setValue(stored || browserTz);
+      setLoaded(true);
+
+      // First-time auto-save: if the column was null and the browser knows
+      // a TZ, persist it without making the user click anything. Settings
+      // still lets them override.
+      if (!stored && browserTz) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase
+            .from("profiles")
+            .update({ timezone: browserTz })
+            .eq("user_id", user.id);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function save(next?: string) {
+    const tz = (next ?? value).trim();
+    if (!tz) return;
+    setSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSaving(false); return; }
+    const { error } = await supabase
+      .from("profiles")
+      .update({ timezone: tz })
+      .eq("user_id", user.id);
+    setSaving(false);
+    setStatus(error ? `Error: ${error.message}` : "Saved.");
+    setTimeout(() => setStatus(null), 2000);
+  }
+
+  if (!loaded) return null;
+
+  // Common IANA zones — keep the list short and let users type a custom
+  // value if theirs isn't here. Order: detected first, then a curated set.
+  const COMMON: string[] = [
+    "America/New_York",
+    "America/Chicago",
+    "America/Denver",
+    "America/Los_Angeles",
+    "America/Phoenix",
+    "America/Anchorage",
+    "Pacific/Honolulu",
+    "Europe/London",
+    "Europe/Paris",
+    "Europe/Berlin",
+    "Europe/Zurich",
+    "Asia/Jerusalem",
+    "Asia/Dubai",
+    "Asia/Kolkata",
+    "Asia/Singapore",
+    "Asia/Tokyo",
+    "Australia/Sydney",
+    "UTC",
+  ];
+  const options = Array.from(new Set([detected, ...COMMON].filter(Boolean)));
+
+  return (
+    <section className="bg-bg-card rounded-2xl p-4">
+      <div className="text-eyebrow font-semibold text-text-secondary uppercase tracking-wider">
+        Timezone
+      </div>
+      <p className="mt-2 text-caption text-text-secondary">
+        Your morning briefing renders at 5:30 in this timezone. We auto-detect
+        from your browser; override here if you want to.
+      </p>
+      <div className="flex gap-2 mt-3 items-center">
+        <select
+          value={options.includes(value) ? value : "__custom__"}
+          onChange={(e) => {
+            if (e.target.value !== "__custom__") {
+              setValue(e.target.value);
+              save(e.target.value);
+            }
+          }}
+          className="flex-1 rounded-xl bg-bg-primary px-3 py-2 text-sm text-text-primary border border-transparent focus:border-jewel-emerald focus:outline-none"
+        >
+          {options.map((tz) => (
+            <option key={tz} value={tz}>
+              {tz}{tz === detected ? " · detected" : ""}
+            </option>
+          ))}
+          <option value="__custom__">Custom…</option>
+        </select>
+      </div>
+      {!options.includes(value) && (
+        <div className="flex gap-2 mt-2">
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="Continent/City (e.g. America/New_York)"
+            className="flex-1 rounded-xl bg-bg-primary px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary/60 border border-transparent focus:border-jewel-emerald focus:outline-none font-mono"
+          />
+          <button
+            onClick={() => save()}
+            disabled={saving}
+            className="rounded-xl bg-jewel-emerald text-white text-sm font-semibold px-4 disabled:opacity-50"
+          >
+            {saving ? "…" : "Save"}
+          </button>
+        </div>
+      )}
+      {status && <div className="mt-2 text-caption text-text-secondary">{status}</div>}
+    </section>
+  );
+}
+
 
 function ProxyTemplateCard() {
   const [value, setValue] = useState("");
