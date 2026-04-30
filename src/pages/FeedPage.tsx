@@ -175,23 +175,29 @@ export default function FeedPage() {
     // Persist toggle across sessions — feels broken when it resets every reload.
     return localStorage.getItem("feed.hideSeen") === "1";
   });
-  // Per-device memory of which paper IDs the user has *seen at the top
-  // of the feed* on prior loads. The same paper shouldn't camp the
-  // top spot across refreshes — once you've seen it there, it sinks
-  // below anything you haven't seen yet. Entries auto-expire after
-  // a few hours so the demotion isn't permanent.
-  const SEEN_TOP_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
-  const SEEN_TOP_TRACK = 5; // top-N positions count as "seen at top"
-  const SEEN_TOP_MAX = 30;  // cap ring size
-  const [seenTopIds, setSeenTopIds] = useState<Set<string>>(() => {
+  // Per-device memory of which papers the user has seen at the top of
+  // the feed. Two thresholds, derived from user feedback ("if I've seen
+  // it and it's been there for a day, I don't even want to see it on
+  // the front page — assume I've already thought about it and don't
+  // care about it by now"):
+  //
+  //   * If first seen < 24h ago → demoted from the top (ranking signal)
+  //   * If first seen ≥ 24h ago → DROPPED from the feed entirely
+  //
+  // <90-min-old papers are exempt regardless (very-fresh = always on top).
+  const SEEN_TOP_TRACK = 5;          // top-N positions count as "seen at top"
+  const SEEN_TOP_MAX = 80;           // cap ring size
+  const SEEN_TOP_HARD_DROP_HOURS = 24;
+  const SEEN_TOP_RING_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7d garbage-collect
+  const [seenTopFirstSeen, setSeenTopFirstSeen] = useState<Map<string, number>>(() => {
     try {
       const raw = localStorage.getItem("feed.seenTop");
-      if (!raw) return new Set();
+      if (!raw) return new Map();
       const parsed: { id: string; ts: number }[] = JSON.parse(raw);
-      const cutoff = Date.now() - SEEN_TOP_TTL_MS;
-      return new Set(parsed.filter((x) => x.ts > cutoff).map((x) => x.id));
+      const cutoff = Date.now() - SEEN_TOP_RING_TTL_MS;
+      return new Map(parsed.filter((x) => x.ts > cutoff).map((x) => [x.id, x.ts]));
     } catch {
-      return new Set();
+      return new Map();
     }
   });
   const longPressTimer = useRef<number | null>(null);
@@ -390,7 +396,30 @@ export default function FeedPage() {
     // "Already shown to you at the top" — only counts if the paper isn't
     // very fresh. A <90-min paper is allowed to sit at top across reloads.
     const wasSeenAtTop = (p: Paper): boolean =>
-      seenTopIds.has(p.id) && !isVeryFresh(p);
+      seenTopFirstSeen.has(p.id) && !isVeryFresh(p);
+    // Hard drop: if the user saw this paper at the top of the feed more
+    // than 24h ago, they've had their chance — assume they've already
+    // thought about it and don't care anymore. Pulled from feedback:
+    // "if I've seen it and it's been there for a day, I don't even want
+    // to see it on the front page".
+    const HARD_DROP_MS = SEEN_TOP_HARD_DROP_HOURS * 60 * 60 * 1000;
+    const isStaleSeen = (p: Paper): boolean => {
+      if (isVeryFresh(p)) return false;  // 90-min papers are always exempt
+      const firstSeen = seenTopFirstSeen.get(p.id);
+      if (!firstSeen) return false;
+      return Date.now() - firstSeen >= HARD_DROP_MS;
+    };
+    // Time-decay on relevance: a 7-day-old paper at score 0.85 should
+    // not beat a today's-paper at 0.55. tau ≈ 2 days makes the decay
+    // aggressive enough that >5d papers are effectively de-ranked but
+    // a great paper from 1-2 days ago can still surface above weak
+    // fresh ones.
+    const DECAY_TAU_DAYS = 2;
+    const decayedScore = (p: Paper): number => {
+      const score = p.relevance_score ?? 0;
+      const ageDays = daysOld(p);
+      return score * Math.exp(-ageDays / DECAY_TAU_DAYS);
+    };
     // DOI-level dedup: a single paper sometimes lands twice when RSS
     // and PubMed disagree on the journal name. Keep first occurrence.
     const seenDoi = new Set<string>();
@@ -423,6 +452,7 @@ export default function FeedPage() {
       .filter((p) => !isJunk(p.title))
       .filter((p) => !dismissedSet.has(p.id))
       .filter((p) => !pinnedSet.has(p.id))
+      .filter((p) => !isStaleSeen(p))
       .filter((p) => !(hideSeen && isBriefed(p)))
       .filter(hasBody)
       .filter((p) => {
@@ -474,9 +504,9 @@ export default function FeedPage() {
       }
     } else {
       ordered = ranked.slice().sort((a, b) => {
-        // 1. Already seen-at-top demotion — biggest signal, applies first
-        //    so the same paper never camps top across refreshes (unless
-        //    very fresh; <90 min papers are exempt).
+        // 1. Already seen-at-top demotion — applies first so the same
+        //    paper never camps top across refreshes (unless very fresh;
+        //    <90 min papers are exempt).
         const ta = wasSeenAtTop(a) ? 1 : 0;
         const tb = wasSeenAtTop(b) ? 1 : 0;
         if (ta !== tb) return ta - tb;
@@ -484,12 +514,11 @@ export default function FeedPage() {
         const ba = isBriefed(a) ? 1 : 0;
         const bb = isBriefed(b) ? 1 : 0;
         if (ba !== bb) return ba - bb;
-        // 3. Recency (per-day buckets).
-        const da = daysOld(a);
-        const db = daysOld(b);
-        if (da !== db) return da - db;
-        // 4. Relevance.
-        return (b.relevance_score ?? 0) - (a.relevance_score ?? 0);
+        // 3. Time-decayed relevance — a strong 0.85 paper from 7 days ago
+        //    has effective score ~0.030, so a today's-paper at 0.4 wins.
+        //    Replaces the old (recency-bucket THEN raw-relevance) sort
+        //    that let aging high-scorers dominate the top spot.
+        return decayedScore(b) - decayedScore(a);
       })
       .slice(0, 20);
     }
@@ -502,31 +531,35 @@ export default function FeedPage() {
     }));
 
     // After ranking, mark the top SEEN_TOP_TRACK papers as "seen at top"
-    // for the next load. Skip very-fresh papers — they get to keep
-    // their top slot until they age past the 90-min window.
-    const newlySeen = ordered
+    // for the next load. Skip very-fresh papers (they get to keep their
+    // top slot until they age past 90 min). Crucially, PRESERVE the
+    // original first-seen timestamp for ids already in the map — that's
+    // what powers the 24h-since-first-seen hard drop. A paper seen at
+    // top yesterday and re-seen today must keep yesterday's timestamp.
+    const newlySeenIds = ordered
       .slice(0, SEEN_TOP_TRACK)
       .filter((p) => !isVeryFresh(p))
       .map((p) => p.id);
-    if (newlySeen.length > 0) {
-      const merged = [
-        ...newlySeen.map((id) => ({ id, ts: Date.now() })),
-        ...Array.from(seenTopIds).map((id) => ({ id, ts: Date.now() - 1 })),
-      ];
-      // De-dupe (keep first occurrence — newly-seen wins the timestamp),
-      // cap at SEEN_TOP_MAX, drop expired.
-      const cutoff = Date.now() - SEEN_TOP_TTL_MS;
-      const seen = new Set<string>();
-      const trimmed: { id: string; ts: number }[] = [];
-      for (const x of merged) {
-        if (seen.has(x.id)) continue;
-        if (x.ts < cutoff) continue;
-        seen.add(x.id);
-        trimmed.push(x);
-        if (trimmed.length >= SEEN_TOP_MAX) break;
+    if (newlySeenIds.length > 0) {
+      const now = Date.now();
+      const cutoff = now - SEEN_TOP_RING_TTL_MS;
+      const next = new Map<string, number>();
+      for (const id of newlySeenIds) {
+        const existing = seenTopFirstSeen.get(id);
+        next.set(id, existing ?? now);  // preserve original first-seen
       }
-      localStorage.setItem("feed.seenTop", JSON.stringify(trimmed));
-      setSeenTopIds(new Set(trimmed.map((x) => x.id)));
+      // Carry over older entries that aren't expired and aren't in newly-seen.
+      for (const [id, ts] of seenTopFirstSeen) {
+        if (next.has(id)) continue;
+        if (ts < cutoff) continue;
+        next.set(id, ts);
+        if (next.size >= SEEN_TOP_MAX) break;
+      }
+      const serialised = Array.from(next.entries())
+        .map(([id, ts]) => ({ id, ts }))
+        .sort((a, b) => b.ts - a.ts);  // newest first for nicer debugging
+      localStorage.setItem("feed.seenTop", JSON.stringify(serialised));
+      setSeenTopFirstSeen(next);
     }
 
     setPapers(ordered.slice(0, 20));
