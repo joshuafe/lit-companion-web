@@ -2,12 +2,40 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase, signedAudioURL } from "../lib/supabase";
 import type { Briefing, Paper } from "../lib/types";
 
+interface Turn {
+  speaker?: string;
+  text?: string;
+}
+
 interface PaperBlock {
   paper_id: string;
   intro_phrase?: string;
   body?: string;
+  turns?: Turn[];                 // two-voice conversation shape
   start_seconds?: number;
   end_seconds?: number;
+}
+
+// The script_json field can be either a string (old single-voice
+// briefing) or an array of {speaker, text} turns (new two-voice
+// conversation). Coerce to a single readable string with light speaker
+// labels so the chapter body renders either way.
+function turnsToText(value: unknown): string {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (!Array.isArray(value)) return "";
+  return (value as Turn[])
+    .map((t) => (t?.text || "").trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function paperBlockBody(b: PaperBlock): string {
+  // New shape: turns array. Old shape: body string.
+  if (Array.isArray(b.turns) && b.turns.length > 0) {
+    return turnsToText(b.turns);
+  }
+  return b.body || "";
 }
 
 const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
@@ -402,7 +430,7 @@ export default function BriefingPage() {
                 start={0}
                 active={currentTime < (paperBlocks[0]?.start_seconds || 999)}
                 onSeek={() => seekTo(0)}
-                body={briefing.script_json.greeting}
+                body={turnsToText(briefing.script_json.greeting)}
                 muted
               />
             )}
@@ -417,7 +445,7 @@ export default function BriefingPage() {
                   start={b.start_seconds || 0}
                   active={isActive}
                   onSeek={() => seekToBlock(i)}
-                  body={b.body || ""}
+                  body={paperBlockBody(b)}
                 />
               );
             })}
