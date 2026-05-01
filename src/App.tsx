@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Routes, Route, Navigate, NavLink, useLocation } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
-import { supabase } from "./lib/supabase";
+import { supabase, SUPABASE_URL } from "./lib/supabase";
 import AuthPage from "./pages/AuthPage";
 import TourPage from "./pages/TourPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
@@ -55,6 +55,52 @@ export default function App() {
       const journals = (data?.suggested_journals as unknown[]) || [];
       const hasJournals = journals.length > 0;
       setNeedsOnboarding(!(hasInterest || hasJournals));
+    })();
+  }, [session]);
+
+  // Wake-up dormant users on sign-in. If the most recent briefing is
+  // >72h old (matching the backend's 'dormant' tier threshold), call
+  // the wake-up edge function — it stamps profiles.refresh_requested_at,
+  // the seed_watcher promotes the user on its next 5-min tick, and a
+  // fresh briefing is rendered. The PWA shows a 'refreshing your feed'
+  // banner until that briefing arrives.
+  useEffect(() => {
+    if (!session) return;
+    (async () => {
+      const SEVENTY_TWO_HOURS_MS = 72 * 60 * 60 * 1000;
+      const { data: latest } = await supabase
+        .from("briefings")
+        .select("generated_at")
+        .order("generated_at", { ascending: false })
+        .limit(1);
+      const last = (latest as { generated_at: string }[] | null)?.[0]?.generated_at;
+      const lastTs = last ? Date.parse(last) : 0;
+      const dormant = !lastTs || (Date.now() - lastTs) > SEVENTY_TWO_HOURS_MS;
+      if (!dormant) return;
+
+      // Don't fire wake-up if we already did in the last hour — the
+      // banner is showing, the daemon is running, no need to spam.
+      const lastWakeRaw = localStorage.getItem("feed.lastWakeUp");
+      if (lastWakeRaw && Date.now() - Number(lastWakeRaw) < 60 * 60 * 1000) {
+        localStorage.setItem("feed.refreshing", "1");
+        return;
+      }
+
+      try {
+        const { data: { session: s } } = await supabase.auth.getSession();
+        if (!s) return;
+        const resp = await fetch(
+          `${SUPABASE_URL}/functions/v1/wake-up`,
+          { method: "POST", headers: { Authorization: `Bearer ${s.access_token}` } },
+        );
+        if (resp.ok) {
+          localStorage.setItem("feed.refreshing", "1");
+          localStorage.setItem("feed.lastWakeUp", String(Date.now()));
+        }
+      } catch (e) {
+        // Non-fatal — banner stays whether wake-up call succeeded or not.
+        console.warn("wake-up call failed", e);
+      }
     })();
   }, [session]);
 

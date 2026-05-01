@@ -653,6 +653,7 @@ export default function FeedPage() {
 
   return (
     <div className="max-w-lg lg:max-w-4xl mx-auto px-5 lg:px-10 pt-10">
+      <RefreshingBanner />
       <header className="mb-6">
         {newSinceLast > 0 && (
           <div className="mb-1">
@@ -1383,5 +1384,74 @@ function RelevancePill({ rank, total }: { rank: number; total: number }) {
     <span className={`text-white text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap ${bg}`}>
       {label}
     </span>
+  );
+}
+
+// Banner shown to a user who came back after >72h of inactivity. The
+// PWA's auth handler stamps localStorage.feed.refreshing on sign-in;
+// the watcher on the Mac picks the user up via refresh_requested_at,
+// runs a full pipeline, and writes a new briefing. We subscribe to
+// the briefings table via realtime and clear the banner the moment
+// a row arrives. Failsafe: 10-min timeout clears regardless.
+function RefreshingBanner() {
+  const [show, setShow] = useState<boolean>(() =>
+    localStorage.getItem("feed.refreshing") === "1",
+  );
+
+  useEffect(() => {
+    if (!show) return;
+    let cleared = false;
+    const clear = () => {
+      if (cleared) return;
+      cleared = true;
+      localStorage.removeItem("feed.refreshing");
+      setShow(false);
+    };
+
+    // Realtime — the briefings table will get a new row when the
+    // daemon finishes. Subscribe and clear on the first one.
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      channel = supabase.channel(`refresh-${user.id}`)
+        .on(
+          "postgres_changes" as any,
+          {
+            event: "*",
+            schema: "public",
+            table: "briefings",
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => clear(),
+        )
+        .subscribe();
+    })();
+
+    // Failsafe: clear after 10 minutes whether or not realtime fires.
+    const timer = window.setTimeout(clear, 10 * 60 * 1000);
+
+    return () => {
+      window.clearTimeout(timer);
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [show]);
+
+  if (!show) return null;
+  return (
+    <div className="mb-5 rounded-2xl bg-gradient-to-br from-jewel-emerald/14 to-jewel-topaz/10 border border-jewel-emerald/30 p-4 flex items-start gap-3">
+      <div className="mt-0.5 w-8 h-8 rounded-full bg-jewel-emerald/15 flex items-center justify-center shrink-0">
+        <span className="block w-3 h-3 rounded-full bg-jewel-emerald animate-pulse" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-[14px] font-semibold text-text-primary">
+          Refreshing your feed
+        </div>
+        <p className="text-caption text-text-secondary mt-0.5 leading-relaxed">
+          Catching up on what you missed — usually 2-5 minutes. We'll
+          email you when your new briefing's ready, or just check back here.
+        </p>
+      </div>
+    </div>
   );
 }
