@@ -58,6 +58,40 @@ export default function App() {
     })();
   }, [session]);
 
+  // Stamp profiles.last_active_at on every app open and on
+  // visibility-change → visible. Cheap one-row update, ~50ms. This is
+  // the source-of-truth activity signal the pulse uses to decide tier
+  // — auth.last_sign_in_at only updates on full re-auth, which a
+  // PWA user with a persistent session never does, so without this
+  // stamp a user who opens the app daily would still look dormant.
+  // Throttled to once per 5 min per device.
+  useEffect(() => {
+    if (!session) return;
+    const STAMP_THROTTLE_MS = 5 * 60 * 1000;
+
+    async function stamp() {
+      const lastStampRaw = localStorage.getItem("profile.lastActiveStamp");
+      if (lastStampRaw && Date.now() - Number(lastStampRaw) < STAMP_THROTTLE_MS) {
+        return;
+      }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const nowIso = new Date().toISOString();
+      const { error } = await supabase
+        .from("profiles")
+        .update({ last_active_at: nowIso })
+        .eq("user_id", user.id);
+      if (!error) {
+        localStorage.setItem("profile.lastActiveStamp", String(Date.now()));
+      }
+    }
+
+    stamp();
+    const onVisible = () => { if (document.visibilityState === "visible") stamp(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [session]);
+
   // Wake-up dormant users on sign-in. If the most recent briefing is
   // >72h old (matching the backend's 'dormant' tier threshold), call
   // the wake-up edge function — it stamps profiles.refresh_requested_at,
